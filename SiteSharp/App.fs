@@ -77,34 +77,41 @@ let loadWindow() =
 
       path
 
-   let drawGraph w h points =
-      let minMaxPoint (minX, maxX, minY, maxY) p = (Math.Min(p.x, minX), Math.Max(p.x, maxX), Math.Min(p.y, minY), Math.Max(p.y, maxY))
-      let minX, maxX, minY, maxY = Seq.fold minMaxPoint (0., 0., 0., 0.) points
-      let avg = Seq.averageBy (fun p -> p.y) points
-      let context = { ScaleX = (w - 10.)/w; // (w - 10.) / Math.Abs(maxX - minX);
-                      ScaleY = (h - 10.) / Math.Abs(maxY - minY);
-                      OffsetX = -minX; 
-                      OffsetY = -minY }
-      let rec drawGraphInner prev remaining =
-         if (Seq.isEmpty remaining) then
-            prev
+   let drawGraph w h points count =
+      let minMaxPoint (minX, maxX, minY, maxY, start) p =
+         if (start) then
+            (p.x, p.x, p.y, p.y, false)
          else
-            let nextPoint = Seq.head(remaining)
-            drawLine context prev nextPoint (Seq.isEmpty (Seq.skip 1 remaining)) "segment"
-            drawGraphInner nextPoint (Seq.skip 1 remaining)
+            Math.Min(p.x, minX), Math.Max(p.x, maxX), Math.Min(p.y, minY), Math.Max(p.y, maxY), false
+
+      let minX, maxX, minY, maxY, _ = Seq.fold minMaxPoint (0., 0., 0., 0., true) points
+  
+      let avg = Seq.averageBy (fun p -> p.y) (Seq.skip (count - 10) points)
+
+      let context = { ScaleX = (w - 10.)/w; // (w - 10.) / Math.Abs(maxX - minX);
+                      ScaleY = (h - 10.) / if minY = maxY then 1. else maxY // Math.Abs(maxY - minY);
+                      OffsetX = 0.0; //-minX; 
+                      OffsetY = -Math.Min(0., minY) } //-minY }
+    
+      window.graph.Children.Clear()
+      let totalWidth = Math.Max(window.graph.ActualWidth, w)
+
+      drawLine context {x = 0.; y = minY} {x = float totalWidth; y = minY } false "average"
+      drawLine context {x = 0.; y = avg} {x = float totalWidth; y = avg } false "average"
+      drawLine context {x = 0.; y = maxY} {x = float totalWidth; y = maxY } false "average"
+
+      window.MinLabel.Content <- minY.ToString()
+      window.AvgLabel.Content <- Math.Round(avg, 0).ToString()
+      window.MaxLabel.Content <- maxY.ToString()
+      
+      window.graph.Children.Add(makePath context points) |> ignore
+      drawPoint context (Seq.last points)
+      
+      // Resize graph it grew.
       let scaleX = Math.Abs(maxX - minX) / w
       if (scaleX > 1.) then
          window.graph.Width <- scaleX * w
          window.graphScroller.ScrollToRightEnd()
-
-     
-
-      window.graph.Children.Clear()
-      let totalWidth = Math.Max(window.graph.ActualWidth, w)
-      drawLine context {x = 0.; y = avg} {x = float totalWidth; y = avg } false "average"
-      
-      window.graph.Children.Add(makePath context points) |> ignore
-      drawPoint context (Seq.last points)
 
       //drawGraphInner origin points
       
@@ -121,7 +128,7 @@ let loadWindow() =
       timer := new Timer(new TimerCallback(fun _ -> ctx.Post(new SendOrPostCallback(fun _ -> demo w h newPoints (x + 100.)), null)), null, 1000, 0)
       ()
 
-   let rec monitor w h d x (url: string) (dataPoints) context = 
+   let rec monitor w h d x (url: string) dataPoints count context = 
       Async.Start (async {
             do! Async.SwitchToThreadPool()   
             let client = new System.Net.WebClient()
@@ -130,9 +137,10 @@ let loadWindow() =
             let timeTaken = watch.ElapsedMilliseconds
             do! Async.SwitchToContext(context)
             let newDataPoints = (Seq.append dataPoints (Seq.singleton {x = x; y = float timeTaken}))
-            drawGraph w h newDataPoints |> ignore
+            let newCount = count + 1
+            drawGraph w h newDataPoints newCount |> ignore
             if (!timer <> null) then timer.Value.Dispose()
-            timer := new Timer(new TimerCallback(fun _ -> monitor w h d (x + (float d / 100.)) url newDataPoints context), null, d, 0)
+            timer := new Timer(new TimerCallback(fun _ -> monitor w h d (x + (float d / 10.)) url newDataPoints newCount context), null, d, 0)
          })
   
   
@@ -145,7 +153,7 @@ let loadWindow() =
 
       //drawGraph w h points |> ignore
       // demo w h (Seq.singleton origin) 10.0
-      monitor w h 1000 0. "http://zoeken.provant.bibliotheek.be/?q=boek" Seq.empty SynchronizationContext.Current
+      monitor w h 1000 0. "http://zoeken.provant.bibliotheek.be/?q=boek" Seq.empty 0 SynchronizationContext.Current
       )
 
    window.Root

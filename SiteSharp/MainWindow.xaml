@@ -46,7 +46,7 @@
          <Setter Property="StrokeThickness" Value="1.0" />
          <Setter Property="SnapsToDevicePixels" Value="false" />
       </Style>
-             
+
       <!--<Storyboard x:Key="PointStoryboard">
          <DoubleAnimation
                  Storyboard.Target="{Binding Path=., RelativeSource={RelativeSource AncestorType=Ellipse}}"
@@ -55,12 +55,37 @@
       </Storyboard>-->
    </Window.Resources>
 
-   <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Hidden" Name="graphScroller" >
-      <Canvas Name="graph" VerticalAlignment="Stretch" Background="AliceBlue" Height="250">
-         <Canvas.RenderTransform>
-            <TranslateTransform X="0.0" Y="0.0" x:Name="graphOffset" />
-            <!--<ScaleTransform ScaleX="1.0" ScaleY="1.0" x:Name="graphScale" />-->
-         </Canvas.RenderTransform>
-      </Canvas>
-   </ScrollViewer>
+   <Canvas Name="pane">
+      <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Hidden" Name="graphScroller" 
+                    Height="{Binding ElementName=pane, Path=ActualHeight}"
+                    Width="{Binding ElementName=pane, Path=ActualWidth}">
+         <Canvas Name="graph" Background="AliceBlue">
+            <Canvas.RenderTransform>
+               <TranslateTransform X="0.0" Y="0.0" x:Name="graphOffset" />
+               <!--<ScaleTransform ScaleX="1.0" ScaleY="1.0" x:Name="graphScale" />-->
+            </Canvas.RenderTransform>
+
+         </Canvas>
+      </ScrollViewer>
+      <Grid Height="67" Canvas.Left="368" Canvas.Top="129" Width="100" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+         <Grid.RowDefinitions>
+            <RowDefinition Height="23*"/>
+            <RowDefinition Height="23*"/>
+            <RowDefinition Height="23*"/>
+         </Grid.RowDefinitions>
+         <Label Content="Min:" Grid.Row="0" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
+         <Label Name="MinLabel" Grid.Row="0" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right"/>
+
+         <Label Content="Avg:" Grid.Row="1" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
+         <Label Name="AvgLabel" Grid.Row="1" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right" />
+
+         <Label Content="Max:" Grid.Row="2" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
+         <Label Name="MaxLabel" Grid.Row="2" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right" />
+      </Grid>
+   </Canvas>
+
+
+
+
+
 </Window>
