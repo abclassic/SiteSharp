@@ -1,4 +1,8 @@
-﻿module MainApp
+﻿(*
+   Copyright Marcus van Houdt - 9/12/2013
+ *)
+
+module MainApp
 
 open System
 open System.Threading
