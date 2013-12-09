@@ -97,13 +97,6 @@
          <Setter Property="StrokeThickness" Value="1.0" />
          <Setter Property="SnapsToDevicePixels" Value="false" />
       </Style>
-
-      <!--<Storyboard x:Key="PointStoryboard">
-         <DoubleAnimation
-                 Storyboard.Target="{Binding Path=., RelativeSource={RelativeSource AncestorType=Ellipse}}"
-                 Storyboard.TargetProperty="Opacity"
-                 From="0.0" To="1.0" Duration="0:0:5" />
-      </Storyboard>-->
    </Window.Resources>
 
    <Canvas Name="pane" Background="Transparent">
@@ -121,8 +114,6 @@
                   <MenuItem Header="Settings" Name="thumbSettings" />
                </ContextMenu>
             </Canvas.ContextMenu>
-
-            <!--<Ellipse Fill="#00FF00C5" Height="92" Canvas.Left="78" Stroke="#FFC7006D" Canvas.Top="43" Width="109" StrokeThickness="2"/>-->
          </Canvas>
       </ScrollViewer>
       <Grid Canvas.Left="368" Canvas.Top="129" Width="100" HorizontalAlignment="Right" VerticalAlignment="Bottom">
@@ -164,9 +155,4 @@
          </StackPanel>
       </Grid>
    </Canvas>
-
-
-
-
-
 </Window>

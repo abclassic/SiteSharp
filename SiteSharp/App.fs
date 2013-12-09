@@ -11,6 +11,8 @@ open Microsoft.FSharp.Control.WebExtensions
 open System.Windows
 
 type MainWindow = XAML<"MainWindow.xaml">
+
+// todo: just use Windows.Point
 type Point = 
    {x: float; y: float }
    static member (+) (a, b) =
@@ -113,10 +115,10 @@ let loadWindow() =
   
       let avg = Seq.averageBy (fun p -> p.y) (Seq.skip (count - 10) points)
 
-      let context = { ScaleX = (w - 10.) / window.graph.ActualWidth; // (w - 10.) / Math.Abs(maxX - minX);
-                      ScaleY = (h - 10.) / if minY = maxY then 1. else maxY // Math.Abs(maxY - minY);
-                      OffsetX = 0.0; //-minX; 
-                      OffsetY = -Math.Min(0., minY) } //-minY }
+      let context = { ScaleX = (w - 10.) / window.graph.ActualWidth;
+                      ScaleY = (h - 10.) / if minY = maxY then 1. else maxY
+                      OffsetX = 0.0;
+                      OffsetY = -Math.Min(0., minY) }
     
       window.graph.Children.Clear()
      
