@@ -107,7 +107,6 @@
    </Window.Resources>
 
    <Canvas Name="pane" Background="Transparent">
-   
       <ScrollViewer HorizontalScrollBarVisibility="Visible" VerticalScrollBarVisibility="Hidden" Name="graphScroller" 
                     Height="{Binding ElementName=pane, Path=ActualHeight}"
                     Width="{Binding ElementName=pane, Path=ActualWidth}"
@@ -119,8 +118,10 @@
             <Canvas.ContextMenu>
                <ContextMenu >
                   <MenuItem Header="Close" Name="thumbClose" />
+                  <MenuItem Header="Settings" Name="thumbSettings" />
                </ContextMenu>
             </Canvas.ContextMenu>
+
             <!--<Ellipse Fill="#00FF00C5" Height="92" Canvas.Left="78" Stroke="#FFC7006D" Canvas.Top="43" Width="109" StrokeThickness="2"/>-->
          </Canvas>
       </ScrollViewer>
@@ -142,6 +143,25 @@
 
          <Label Content="Last:" Grid.Row="3" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
          <Label Name="LastLabel" Grid.Row="3" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right" />
+      </Grid>
+      <Grid Name="settings" Visibility="Hidden" Canvas.Left="0." Canvas.Top="0." Width="{Binding ElementName=pane, Path=ActualWidth}" Height="{Binding ElementName=pane, Path=ActualHeight}" Background="White" HorizontalAlignment="Left">
+         <Grid.Opacity>0.9</Grid.Opacity>
+         <Grid.RowDefinitions>
+            <RowDefinition Height="2" />
+            <RowDefinition Height="25" />
+            <RowDefinition Height="2" />
+            <RowDefinition Height="25"/>
+         </Grid.RowDefinitions>
+         <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="76" />
+            <ColumnDefinition />
+         </Grid.ColumnDefinitions>
+         <Label Grid.Row="1" Grid.Column="0">Url to test:</Label>
+         <TextBox Name="settingsUrl" Grid.Row="1" Grid.Column="1" FontFamily="Consolas" VerticalAlignment="Center">http://zoeken.provant.bibliotheek.be/?q=boek</TextBox>
+         <StackPanel Orientation="Horizontal" Grid.Row="3" Grid.Column="2">
+            <Button Width="100" Name="settingsOK" Content="OK" HorizontalAlignment="Left" IsDefault="true" />
+            <Button Width="100" Name="settingsCancel" Content="Cancel" HorizontalAlignment="Left" Margin="5,0,0,0" />
+         </StackPanel>
       </Grid>
    </Canvas>
 

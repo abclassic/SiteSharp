@@ -18,14 +18,20 @@ type Point =
    member p.AsWpfPoint() =
       new Windows.Point(p.x, p.x)
 
+type Settings = 
+   { mutable url: string;
+     mutable updated: bool
+   }
+
 type GraphContext = { ScaleX: float; ScaleY: float; OffsetX: float; OffsetY: float  }
 
 let mutable windowDragging = false
 let mutable dragCoords = new Windows.Point()
+let settings = { url = null; updated = false }
+let tmpSettings = { url = null; updated = false }
 
 let loadWindow() =
    let window = MainWindow()
-   
    let origin = { Point.x = 0.; y = 0. }
 
    let points = seq {
@@ -154,32 +160,42 @@ let loadWindow() =
       timer := new Timer(new TimerCallback(fun _ -> ctx.Post(new SendOrPostCallback(fun _ -> demo w h newPoints (x + 100.)), null)), null, 1000, 0)
       ()
 
-   let rec monitor d x (url: string) dataPoints count context = 
-      Async.Start (async {
-            do! Async.SwitchToThreadPool()   
-            let client = new System.Net.WebClient()
-            let watch = System.Diagnostics.Stopwatch.StartNew()
-            let! data = client.AsyncDownloadString(new System.Uri(url))
-            let timeTaken = watch.ElapsedMilliseconds
-            do! Async.SwitchToContext(context)
-            let newDataPoints = (Seq.append dataPoints (Seq.singleton {x = x; y = float timeTaken}))
-            let newCount = count + 1
-            drawGraph newDataPoints newCount |> ignore
-            if (!timer <> null) then timer.Value.Dispose()
-            timer := new Timer(new TimerCallback(fun _ -> monitor d (x + (float d / 50.)) url newDataPoints newCount context), null, d, 0)
-         })
-  
-  
-   //let lastPoint = drawGraph context points
-   
+   let getUrl() = settings.url
 
+   let rec monitor d x dataPoints count context = 
+      if (settings.updated) then
+         settings.updated <- false
+         monitor d 0. (Seq.empty) 0 context
+      else
+         Async.Start (async {
+               do! Async.SwitchToContext(context)
+               let url = getUrl()
+               do! Async.SwitchToThreadPool()   
+               let client = new System.Net.WebClient()
+               let watch = System.Diagnostics.Stopwatch.StartNew()
+               let! data = client.AsyncDownloadString(new System.Uri(url))
+               let timeTaken = watch.ElapsedMilliseconds
+               do! Async.SwitchToContext(context)
+               let newDataPoints = (Seq.append dataPoints (Seq.singleton {x = x; y = float timeTaken}))
+               let newCount = count + 1
+               drawGraph newDataPoints newCount |> ignore
+               if (!timer <> null) then timer.Value.Dispose()
+               timer := new Timer(new TimerCallback(fun _ -> monitor d (x + (float d / 50.)) newDataPoints newCount context), null, d, 0)
+            })
+
+   // Hook settings dialog.
+   let captureCurrentSettings (s) = s.url <- window.settingsUrl.Text
+   let reinstatePrevSettings() = window.settingsUrl.Text <- tmpSettings.url
+   window.thumbSettings.Click.Add(fun _ -> window.settings.Visibility <- Visibility.Visible; captureCurrentSettings(tmpSettings))
+   window.settingsCancel.Click.Add(fun _ -> window.settings.Visibility <- Visibility.Hidden; reinstatePrevSettings())
+   window.settingsOK.Click.Add(fun _ -> settings.url <- tmpSettings.url; settings.updated <- true; window.settings.Visibility <- Visibility.Hidden)
+  
+   captureCurrentSettings(settings)
+   
    window.graph.Loaded.Add(fun e ->
-      monitor 1000 0. "http://zoeken.provant.bibliotheek.be/?q=boek" Seq.empty 0 SynchronizationContext.Current
-      )
+      monitor 1000 0. Seq.empty 0 SynchronizationContext.Current)
 
    window.Root.Loaded.Add(fun _ ->  WinInterop.MakeWindowTransparent(window.Root))   
-  
-  // window.thumb.DragDelta.Add(fun e -> window.Root.Left <- window.Root.Left + e.HorizontalChange; window.Root.Top <- window.Root.Top + e.VerticalChange; e.Handled <- false)
   
    window.thumbClose.Click.Add(fun _ -> window.Root.Close())
    window.graph.MouseDown.Add(fun e -> windowDragging <- true; dragCoords <- e.GetPosition(window.Root))
@@ -194,7 +210,6 @@ let loadWindow() =
    let opacity = window.graph.Opacity
    window.Root.Activated.Add(fun _ -> window.graph.Opacity <- 1.)
    window.Root.Deactivated.Add(fun _ -> window.graph.Opacity <- opacity)
-
    window.Root
 
 [<STAThread>]
