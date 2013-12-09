@@ -179,12 +179,18 @@ let loadWindow() =
                do! Async.SwitchToThreadPool()   
                let client = new System.Net.WebClient()
                let watch = System.Diagnostics.Stopwatch.StartNew()
-               let! data = client.AsyncDownloadString(new System.Uri(url))
+               let! data = Async.Catch(client.AsyncDownloadString(new System.Uri(url)))
                let timeTaken = watch.ElapsedMilliseconds
                do! Async.SwitchToContext(context)
-               let newDataPoints = (Seq.append dataPoints (Seq.singleton {x = x; y = float timeTaken}))
-               let newCount = count + 1
-               drawGraph newDataPoints newCount |> ignore
+               
+               // Show error if there is one.
+               let error = match data with Choice.Choice2Of2 e -> e | _ -> null
+               if (error <> null) then
+                  System.Windows.MessageBox.Show(error.Message, "error", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
+               
+               let newDataPoints = if (error <> null) then dataPoints else (Seq.append dataPoints (Seq.singleton {x = x; y = float timeTaken}))
+               let newCount = if (error <> null) then count else count + 1
+               if (not (Seq.isEmpty newDataPoints)) then drawGraph newDataPoints newCount |> ignore
                if (!timer <> null) then timer.Value.Dispose()
                timer := new Timer(new TimerCallback(fun _ -> monitor d (x + (float d / 50.)) newDataPoints newCount context), null, d, 0)
             })
