@@ -20,6 +20,9 @@ type Point =
 
 type GraphContext = { ScaleX: float; ScaleY: float; OffsetX: float; OffsetY: float  }
 
+let mutable windowDragging = false
+let mutable dragCoords = new Windows.Point()
+
 let loadWindow() =
    let window = MainWindow()
    
@@ -32,6 +35,7 @@ let loadWindow() =
 
    let drawPoint context point =
       let ellipse = new Shapes.Ellipse()
+      ellipse.Style <- window.Root.Resources.Item("point") :?> Style
       window.graph.Children.Add(ellipse) |> ignore
       Canvas.SetLeft(ellipse, (context.OffsetX + point.x) * context.ScaleX)
       Canvas.SetBottom(ellipse, (context.OffsetY + point.y) * context.ScaleY)
@@ -48,7 +52,6 @@ let loadWindow() =
       Canvas.SetLeft(line, (context.OffsetX + left.x) * context.ScaleX)
       Canvas.SetBottom(line, context.ScaleY * (context.OffsetY + if right.y < left.y then right.y else left.y))
       if (shouldDrawPoint) then
-         //drawPoint context left
          drawPoint context right
       window.graph.Children.Add(line) |> ignore
 
@@ -73,7 +76,22 @@ let loadWindow() =
 
       Canvas.SetLeft(path, 0.0)
       Canvas.SetTop(path, 0.0)
-      // Canvas.SetBottom(path, context.ScaleY * (context.OffsetY + firstPoint.y))
+      
+      let tooltipEllipse = new Shapes.Ellipse()
+      tooltipEllipse.Style <- window.Root.Resources.Item("tooltipEllipse") :?> Style
+      let label = new Controls.Label()
+      label.Style <- window.Root.Resources.Item("tooltipLabel") :?> Style
+
+      path.MouseEnter.Add(fun e -> let p = e.GetPosition(path)
+                                   label.Content <- Math.Round((h - p.Y) / context.ScaleY, 2).ToString()
+                                   Canvas.SetLeft(tooltipEllipse, p.X)
+                                   Canvas.SetTop(tooltipEllipse, p.Y)
+                                   Canvas.SetLeft(label, p.X + tooltipEllipse.Width + 5.)
+                                   Canvas.SetTop(label, p.Y)
+                                   window.graph.Children.Add(tooltipEllipse) |> ignore
+                                   window.graph.Children.Add(label) |> ignore)
+
+      tooltipEllipse.MouseLeave.Add(fun _ -> window.graph.Children.Remove(tooltipEllipse); window.graph.Children.Remove(label) |> ignore)
 
       path
 
@@ -88,31 +106,42 @@ let loadWindow() =
   
       let avg = Seq.averageBy (fun p -> p.y) (Seq.skip (count - 10) points)
 
-      let context = { ScaleX = (w - 10.)/w; // (w - 10.) / Math.Abs(maxX - minX);
+      let context = { ScaleX = 1.; // (w - 10.) / Math.Abs(maxX - minX);
                       ScaleY = (h - 10.) / if minY = maxY then 1. else maxY // Math.Abs(maxY - minY);
                       OffsetX = 0.0; //-minX; 
                       OffsetY = -Math.Min(0., minY) } //-minY }
     
       window.graph.Children.Clear()
-      let totalWidth = Math.Max(window.graph.ActualWidth, w)
-
-      drawLine context {x = 0.; y = minY} {x = float totalWidth; y = minY } false "average"
-      drawLine context {x = 0.; y = avg} {x = float totalWidth; y = avg } false "average"
-      drawLine context {x = 0.; y = maxY} {x = float totalWidth; y = maxY } false "average"
+     
+      if (window.MaxLabel.Content <> null) then
+         let existingMax = Double.Parse(window.MaxLabel.Content :?> string)
+         if (maxY > existingMax + 0.1) then
+            WinInterop.BlinkWindow(window.Root) // blink only if not focused
 
       window.MinLabel.Content <- minY.ToString()
       window.AvgLabel.Content <- Math.Round(avg, 0).ToString()
       window.MaxLabel.Content <- maxY.ToString()
-      
-      window.graph.Children.Add(makePath context points) |> ignore
+      window.LastLabel.Content <- (Seq.last points).y.ToString() // todo: optimize to stop walking this thing
+     
+      drawLine context {x = 0.; y = minY} {x = float maxX; y = minY } false "average"
+      drawLine context {x = 0.; y = avg} {x = float maxX; y = avg } false "average"
+      drawLine context {x = 0.; y = maxY} {x = float maxX; y = maxY } false "average"
+       
+      let path = makePath context points
+      window.graph.Children.Add(path) |> ignore
       drawPoint context (Seq.last points)
-      
+
       // Resize graph it grew.
       let scaleX = Math.Abs(maxX - minX) / w
       if (scaleX > 1.) then
          window.graph.Width <- scaleX * w
-         window.graphScroller.ScrollToRightEnd()
+         let infox = window.graphScroller.HorizontalOffset
+         let infow = window.graphScroller.ViewportWidth
+         let infod = window.graph.ActualWidth
+         if (window.graphScroller.HorizontalOffset + window.graphScroller.ViewportWidth > window.graph.ActualWidth - 5.) then // don't scroll if user has scrolled
+            window.graphScroller.ScrollToRightEnd()
 
+     
       //drawGraphInner origin points
       
 
@@ -140,7 +169,7 @@ let loadWindow() =
             let newCount = count + 1
             drawGraph w h newDataPoints newCount |> ignore
             if (!timer <> null) then timer.Value.Dispose()
-            timer := new Timer(new TimerCallback(fun _ -> monitor w h d (x + (float d / 10.)) url newDataPoints newCount context), null, d, 0)
+            timer := new Timer(new TimerCallback(fun _ -> monitor w h d (x + (float d / 50.)) url newDataPoints newCount context), null, d, 0)
          })
   
   
@@ -155,6 +184,24 @@ let loadWindow() =
       // demo w h (Seq.singleton origin) 10.0
       monitor w h 1000 0. "http://zoeken.provant.bibliotheek.be/?q=boek" Seq.empty 0 SynchronizationContext.Current
       )
+
+   window.Root.Loaded.Add(fun _ ->  WinInterop.MakeWindowTransparent(window.Root))   
+  
+  // window.thumb.DragDelta.Add(fun e -> window.Root.Left <- window.Root.Left + e.HorizontalChange; window.Root.Top <- window.Root.Top + e.VerticalChange; e.Handled <- false)
+  
+   window.thumbClose.Click.Add(fun _ -> window.Root.Close())
+   window.graph.MouseDown.Add(fun e -> windowDragging <- true; dragCoords <- e.GetPosition(window.Root))
+   window.graph.MouseUp.Add(fun _ -> windowDragging <- false)
+   window.graph.MouseLeave.Add(fun _ -> windowDragging <- false)
+   window.graph.MouseMove.Add(fun e -> if (windowDragging) then
+                                          let p = e.GetPosition(window.Root)
+                                          window.Root.Left <- window.Root.Left + p.X - dragCoords.X
+                                          window.Root.Top <- window.Root.Top + p.Y - dragCoords.Y)
+
+
+   let opacity = window.graph.Opacity
+   window.Root.Activated.Add(fun _ -> window.graph.Opacity <- 1.)
+   window.Root.Deactivated.Add(fun _ -> window.graph.Opacity <- opacity)
 
    window.Root
 

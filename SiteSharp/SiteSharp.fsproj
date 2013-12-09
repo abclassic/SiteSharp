@@ -51,6 +51,7 @@
   </Choose>
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
+    <Compile Include="WinInterop.fs" />
     <Compile Include="App.fs" />
     <Resource Include="ApplicationResources.xaml" />
     <Resource Include="MainWindow.xaml" />
