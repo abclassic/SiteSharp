@@ -95,18 +95,19 @@ let loadWindow() =
 
       path
 
-   let drawGraph w h points count =
+   let drawGraph points count =
       let minMaxPoint (minX, maxX, minY, maxY, start) p =
          if (start) then
             (p.x, p.x, p.y, p.y, false)
          else
             Math.Min(p.x, minX), Math.Max(p.x, maxX), Math.Min(p.y, minY), Math.Max(p.y, maxY), false
 
+      let w, h = window.graph.ActualWidth, window.graph.ActualHeight
       let minX, maxX, minY, maxY, _ = Seq.fold minMaxPoint (0., 0., 0., 0., true) points
   
       let avg = Seq.averageBy (fun p -> p.y) (Seq.skip (count - 10) points)
 
-      let context = { ScaleX = 1.; // (w - 10.) / Math.Abs(maxX - minX);
+      let context = { ScaleX = (w - 10.) / window.graph.ActualWidth; // (w - 10.) / Math.Abs(maxX - minX);
                       ScaleY = (h - 10.) / if minY = maxY then 1. else maxY // Math.Abs(maxY - minY);
                       OffsetX = 0.0; //-minX; 
                       OffsetY = -Math.Min(0., minY) } //-minY }
@@ -140,9 +141,6 @@ let loadWindow() =
          let infod = window.graph.ActualWidth
          if (window.graphScroller.HorizontalOffset + window.graphScroller.ViewportWidth > window.graph.ActualWidth - 5.) then // don't scroll if user has scrolled
             window.graphScroller.ScrollToRightEnd()
-
-     
-      //drawGraphInner origin points
       
 
    let timer: Ref<Timer> = ref null
@@ -150,14 +148,13 @@ let loadWindow() =
    let rec demo w h points x =
       let newPoints = Seq.append points (Seq.singleton {x = x; y = 100. })
       if (!timer <> null) then timer.Value.Dispose()
-      //window.graph.Children.Clear()
-      drawGraph w h newPoints |> ignore
+      drawGraph newPoints |> ignore
      
       let ctx = SynchronizationContext.Current
       timer := new Timer(new TimerCallback(fun _ -> ctx.Post(new SendOrPostCallback(fun _ -> demo w h newPoints (x + 100.)), null)), null, 1000, 0)
       ()
 
-   let rec monitor w h d x (url: string) dataPoints count context = 
+   let rec monitor d x (url: string) dataPoints count context = 
       Async.Start (async {
             do! Async.SwitchToThreadPool()   
             let client = new System.Net.WebClient()
@@ -167,9 +164,9 @@ let loadWindow() =
             do! Async.SwitchToContext(context)
             let newDataPoints = (Seq.append dataPoints (Seq.singleton {x = x; y = float timeTaken}))
             let newCount = count + 1
-            drawGraph w h newDataPoints newCount |> ignore
+            drawGraph newDataPoints newCount |> ignore
             if (!timer <> null) then timer.Value.Dispose()
-            timer := new Timer(new TimerCallback(fun _ -> monitor w h d (x + (float d / 50.)) url newDataPoints newCount context), null, d, 0)
+            timer := new Timer(new TimerCallback(fun _ -> monitor d (x + (float d / 50.)) url newDataPoints newCount context), null, d, 0)
          })
   
   
@@ -177,12 +174,7 @@ let loadWindow() =
    
 
    window.graph.Loaded.Add(fun e ->
-      let w, h = window.graph.RenderSize.Width, window.graph.RenderSize.Height
-
-
-      //drawGraph w h points |> ignore
-      // demo w h (Seq.singleton origin) 10.0
-      monitor w h 1000 0. "http://zoeken.provant.bibliotheek.be/?q=boek" Seq.empty 0 SynchronizationContext.Current
+      monitor 1000 0. "http://zoeken.provant.bibliotheek.be/?q=boek" Seq.empty 0 SynchronizationContext.Current
       )
 
    window.Root.Loaded.Add(fun _ ->  WinInterop.MakeWindowTransparent(window.Root))   
