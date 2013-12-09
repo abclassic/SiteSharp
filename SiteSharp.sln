@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SiteSharp", "SiteSharp\SiteSharp.fsproj", "{7EDB0E67-2B5C-4B54-B1DD-34724FA3FFC2}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x86 = Debug|x86
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{7EDB0E67-2B5C-4B54-B1DD-34724FA3FFC2}.Debug|x86.ActiveCfg = Debug|x86
+		{7EDB0E67-2B5C-4B54-B1DD-34724FA3FFC2}.Debug|x86.Build.0 = Debug|x86
+		{7EDB0E67-2B5C-4B54-B1DD-34724FA3FFC2}.Release|x86.ActiveCfg = Release|x86
+		{7EDB0E67-2B5C-4B54-B1DD-34724FA3FFC2}.Release|x86.Build.0 = Release|x86
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal
