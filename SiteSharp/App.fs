@@ -16,14 +16,6 @@ open System.Windows
 
 type MainWindow = XAML<"MainWindow.xaml">
 
-// todo: just use Windows.Point
-type Point = 
-   {x: float; y: float }
-   static member (+) (a, b) =
-      {x = a.x + b.x; y = a.y + b.y}
-   member p.AsWpfPoint() =
-      new Windows.Point(p.x, p.x)
-
 type Settings =
    { mutable url: string;
      mutable maxDataPoints: int;
@@ -42,42 +34,37 @@ let tmpSettings = Settings.Default
 
 let loadWindow() =
    let window = MainWindow()
-   let origin = { Point.x = 0.; y = 0. }
+   let origin = new Windows.Point(0., 0.)
 
-   let points = seq {
-      for i in 0..20 do
-         yield { Point.x = float (i * 20 + 20 + 5 * i); y = 2. * float (i * 5 - i * i) }
-   }
-
-   let drawPoint context point =
+   let drawPoint context (point: Point) =
       let ellipse = new Shapes.Ellipse()
       ellipse.Style <- window.Root.Resources.Item("point") :?> Style
       window.graph.Children.Add(ellipse) |> ignore
-      Canvas.SetLeft(ellipse, (context.OffsetX + point.x) * context.ScaleX)
-      Canvas.SetBottom(ellipse, (context.OffsetY + point.y) * context.ScaleY)
+      Canvas.SetLeft(ellipse, (context.OffsetX + point.X) * context.ScaleX)
+      Canvas.SetBottom(ellipse, (context.OffsetY + point.Y) * context.ScaleY)
 
-   let drawLine context left right shouldDrawPoint styleName =
+   let drawLine context (left: Point) (right: Point) shouldDrawPoint styleName =
       let line = new Shapes.Line()
       line.X1 <- 0.
-      line.X2 <- (right.x - left.x) * context.ScaleX
+      line.X2 <- (right.X - left.X) * context.ScaleX
       line.Y1 <- 0.
-      line.Y2 <- (left.y - right.y) * context.ScaleY
+      line.Y2 <- (left.Y - right.Y) * context.ScaleY
       
       line.Style <- window.Root.Resources.Item(styleName) :?> Style
 
-      Canvas.SetLeft(line, (context.OffsetX + left.x) * context.ScaleX)
-      Canvas.SetBottom(line, context.ScaleY * (context.OffsetY + if right.y < left.y then right.y else left.y))
+      Canvas.SetLeft(line, (context.OffsetX + left.X) * context.ScaleX)
+      Canvas.SetBottom(line, context.ScaleY * (context.OffsetY + if right.Y < left.Y then right.Y else left.Y))
       if (shouldDrawPoint) then
          drawPoint context right
       window.graph.Children.Add(line) |> ignore
 
-   let makePath context points =
+   let makePath context (points: Point seq) =
       let path = new Shapes.Path()
       let h = window.graph.ActualHeight
       let firstPoint = Seq.head points
 
-      let scalePoint p = new Windows.Point(p.x * context.ScaleX, h - p.y * context.ScaleY)
-      let startPoint = scalePoint { x = firstPoint.x + context.OffsetX; y = firstPoint.y + context.OffsetY}
+      let scalePoint (p: Point) = new Point(p.X * context.ScaleX, h - p.Y * context.ScaleY)
+      let startPoint = scalePoint (new Point(firstPoint.X + context.OffsetX, firstPoint.Y + context.OffsetY))
 
       path.Data <- new Media.PathGeometry(seq {
             let figure = new Media.PathFigure()
@@ -112,17 +99,15 @@ let loadWindow() =
       path
 
    let drawGraph points count =
-      let minMaxPoint (minX, maxX, minY, maxY, start) p =
+      let minMaxPoint (minX, maxX, minY, maxY, start) (p: Point) =
          if (start) then
-            (p.x, p.x, p.y, p.y, false)
+            (p.X, p.X, p.Y, p.Y, false)
          else
-            Math.Min(p.x, minX), Math.Max(p.x, maxX), Math.Min(p.y, minY), Math.Max(p.y, maxY), false
+            Math.Min(p.X, minX), Math.Max(p.X, maxX), Math.Min(p.Y, minY), Math.Max(p.Y, maxY), false
 
       let w, h = window.graph.ActualWidth, window.graph.ActualHeight
       let minX, maxX, minY, maxY, _ = Seq.fold minMaxPoint (0., 0., 0., 0., true) points
-  
-      let avg = Seq.averageBy (fun p -> p.y) (Seq.skip (count - 10) points)
-
+      let avg =  ((count - 10), points) ||> Seq.skip |> Seq.averageBy (fun p -> p.Y)
       let context = { ScaleX = (w - 10.) / window.graph.ActualWidth;
                       ScaleY = (h - 10.) / if minY = maxY then 1. else maxY
                       OffsetX = 0.0;
@@ -138,11 +123,11 @@ let loadWindow() =
       window.MinLabel.Content <- minY.ToString()
       window.AvgLabel.Content <- Math.Round(avg, 0).ToString()
       window.MaxLabel.Content <- maxY.ToString()
-      window.LastLabel.Content <- (Seq.last points).y.ToString() // todo: optimize to stop walking this thing
+      window.LastLabel.Content <- (Seq.last points).Y.ToString() // todo: optimize to stop walking this thing
      
-      drawLine context {x = 0.; y = minY} {x = float maxX; y = minY } false "average"
-      drawLine context {x = 0.; y = avg} {x = float maxX; y = avg } false "average"
-      drawLine context {x = 0.; y = maxY} {x = float maxX; y = maxY } false "average"
+      drawLine context (new Point(0., minY)) (new Point(float maxX, minY)) false "average"
+      drawLine context (new Point(0., avg)) (new Point(float maxX, avg)) false "average"
+      drawLine context (new Point(0., maxY)) (new Point(float maxX, maxY)) false "average"
        
       let path = makePath context points
       window.graph.Children.Add(path) |> ignore
@@ -157,25 +142,13 @@ let loadWindow() =
          let infod = window.graph.ActualWidth
          if (window.graphScroller.HorizontalOffset + window.graphScroller.ViewportWidth > window.graph.ActualWidth - 5.) then // don't scroll if user has scrolled
             window.graphScroller.ScrollToRightEnd()
-      
 
    let timer: Ref<Timer> = ref null
-
-   let rec demo w h points x =
-      let newPoints = Seq.append points (Seq.singleton {x = x; y = 100. })
-      if (!timer <> null) then timer.Value.Dispose()
-      drawGraph newPoints |> ignore
-     
-      let ctx = SynchronizationContext.Current
-      timer := new Timer(new TimerCallback(fun _ -> ctx.Post(new SendOrPostCallback(fun _ -> demo w h newPoints (x + 100.)), null)), null, 1000, 0)
-      ()
-
-   let getUrl() = settings.url
 
    let rec monitor d x dataPoints count context = 
       Async.Start (async {
          do! Async.SwitchToContext(context)
-         let url = getUrl()
+         let url = settings.url
          do! Async.SwitchToThreadPool()   
          let client = new System.Net.WebClient()
          let watch = System.Diagnostics.Stopwatch.StartNew()
@@ -190,7 +163,7 @@ let loadWindow() =
          
          let newDataPoints = if (error <> null) then dataPoints 
                              else
-                                let tmp = (Seq.append dataPoints (Seq.singleton {x = x; y = float timeTaken}))
+                                let tmp = (Seq.append dataPoints (Seq.singleton (new Point(x, float timeTaken))))
                                 if (count = settings.maxDataPoints) then Seq.skip 1 tmp
                                 else tmp
          let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
