@@ -11,4 +11,4 @@ Displays a graph like:
 * Supports tooltips on the graph
 * Settings page allows the url to be set / changed
 
-Lincese: MIT
+License: MIT
