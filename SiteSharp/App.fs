@@ -141,35 +141,36 @@ let loadWindow() =
 
    let timer: Ref<Timer> = ref null
 
-   let rec monitor d x dataPoints count context = 
-      Async.Start (async {
-         do! Async.SwitchToContext(context)
-         let url = settings.url
-         do! Async.SwitchToThreadPool()   
-         let client = new System.Net.WebClient()
-         let watch = System.Diagnostics.Stopwatch.StartNew()
-         let! data = Async.Catch(client.AsyncDownloadString(new System.Uri(url)))
-         let timeTaken = watch.ElapsedMilliseconds
-         do! Async.SwitchToContext(context)
-         
-         // Show error if there is one.
-         let error = match data with Choice.Choice2Of2 e -> e | _ -> null
-         if (error <> null) then
-            System.Windows.MessageBox.Show(error.Message, "error", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
-         
-         let newDataPoints = if (error <> null) then dataPoints 
-                             else let tmp = dataPoints @ [new Point(x, float timeTaken)] // is this O(1)?
-                                  if (count = settings.maxDataPoints) then List.tail tmp
-                                  else tmp
-         let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
-         if (newCount > 0) then drawGraph newDataPoints newCount |> ignore
-         if (!timer <> null) then timer.Value.Dispose()
-         timer := new Timer(new TimerCallback(fun _ -> monitor d (x + (float d / 50.)) newDataPoints newCount context), null, d, 0)
-      })
+   let rec monitor d x dataPoints count context initialCall = Async.Start (async {
+      do! Async.SwitchToContext(context)
+      let url = settings.url
+      do! Async.SwitchToThreadPool()   
+      let client = new System.Net.WebClient()
+      let watch = System.Diagnostics.Stopwatch.StartNew()
+      let! data = Async.Catch(client.AsyncDownloadString(new System.Uri(url)))
+      let timeTaken = watch.ElapsedMilliseconds
+      do! Async.SwitchToContext(context)
+      if (not(initialCall) && !timer = null) then return () // restart      
+
+      // Show error if there is one.
+      let error = match data with Choice.Choice2Of2 e -> e | _ -> null
+      if (error <> null) then
+         System.Windows.MessageBox.Show(error.Message, "error", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
+      
+      let newDataPoints = if (error <> null) then dataPoints 
+                          else let tmp = dataPoints @ [new Point(x, float timeTaken)] // is this O(1)?
+                               if (count = settings.maxDataPoints) then List.tail tmp
+                               else tmp
+      let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
+      if (newCount > 0) then drawGraph newDataPoints newCount |> ignore
+      if (!timer <> null) then timer.Value.Dispose()
+      timer := new Timer(new TimerCallback(fun _ -> monitor d (x + (float d / 50.)) newDataPoints newCount context false), null, d, 0)
+   })
 
    let restartMonitor d =
-      if (!timer <> null) then timer.Value.Dispose()
-      monitor d 0. [] 0 SynchronizationContext.Current
+      if (!timer <> null) then timer.Value.Dispose(); timer := null
+      window.graph.Width <- window.graphScroller.Width
+      monitor d 0. [] 0 SynchronizationContext.Current false
 
    let timeInterval = 1000
 
@@ -185,13 +186,14 @@ let loadWindow() =
    captureCurrentSettings(settings)
    
    window.graph.Loaded.Add(fun e ->
-      monitor timeInterval 0. [] 0 SynchronizationContext.Current)
+      monitor timeInterval 0. [] 0 SynchronizationContext.Current true)
 
    window.Root.Loaded.Add(fun _ ->  WinInterop.MakeWindowTransparent(window.Root)) // still necessary?
   
    window.thumRestart.Click.Add(fun _ -> restartMonitor timeInterval)
    window.thumbMinimize.Click.Add(fun _ -> window.Root.WindowState <- WindowState.Minimized)
    window.thumbClose.Click.Add(fun _ -> window.Root.Close())
+   window.graphScroller.PreviewMouseWheel.Add(fun e -> () |> (if (e.Delta > 0) then window.graphScroller.LineRight else window.graphScroller.LineLeft))
    window.graph.MouseDown.Add(fun e -> windowDragging <- true; dragCoords <- e.GetPosition(window.Root))
    window.graph.MouseUp.Add(fun _ -> windowDragging <- false)
    window.graph.MouseLeave.Add(fun _ -> windowDragging <- false)
