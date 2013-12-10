@@ -7,7 +7,6 @@ open System.Windows
 open System.Windows.Interop
 open Microsoft.FSharp.NativeInterop
 
-
 [<StructLayout(LayoutKind.Sequential)>]
 [<Struct>]
 type Margins =

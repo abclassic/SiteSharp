@@ -5,6 +5,7 @@
 module MainApp
 
 open System
+open System.Collections.Generic
 open System.Threading
 open System.Windows
 open System.Windows.Media.Animation
@@ -58,10 +59,10 @@ let loadWindow() =
          drawPoint context right
       window.graph.Children.Add(line) |> ignore
 
-   let makePath context (points: Point seq) =
+   let makePath context (points: Point list) =
       let path = new Shapes.Path()
       let h = window.graph.ActualHeight
-      let firstPoint = Seq.head points
+      let firstPoint = List.head points
 
       let scalePoint (p: Point) = new Point(p.X * context.ScaleX, h - p.Y * context.ScaleY)
       let startPoint = scalePoint (new Point(firstPoint.X + context.OffsetX, firstPoint.Y + context.OffsetY))
@@ -69,11 +70,9 @@ let loadWindow() =
       path.Data <- new Media.PathGeometry(seq {
             let figure = new Media.PathFigure()
             figure.IsClosed <- false
-            figure.StartPoint <- startPoint //scalePoint (Seq.head points)
-            for p in (Seq.skip 1 points) do
-               let line = new Media.LineSegment(scalePoint p, true)
-               figure.Segments.Add(line);
-
+            figure.StartPoint <- startPoint
+            for p in (List.tail points) do
+               new Media.LineSegment(scalePoint p, true) |> figure.Segments.Add
             yield figure
          });
 
@@ -99,15 +98,15 @@ let loadWindow() =
       path
 
    let drawGraph points count =
-      let minMaxPoint (minX, maxX, minY, maxY, start) (p: Point) =
+      let minMaxLastPoint (minX, maxX, minY, maxY, _, start) (p: Point) =
          if (start) then
-            (p.X, p.X, p.Y, p.Y, false)
+            (p.X, p.X, p.Y, p.Y, p, false)
          else
-            Math.Min(p.X, minX), Math.Max(p.X, maxX), Math.Min(p.Y, minY), Math.Max(p.Y, maxY), false
+            Math.Min(p.X, minX), Math.Max(p.X, maxX), Math.Min(p.Y, minY), Math.Max(p.Y, maxY), p, false
 
       let w, h = window.graph.ActualWidth, window.graph.ActualHeight
-      let minX, maxX, minY, maxY, _ = Seq.fold minMaxPoint (0., 0., 0., 0., true) points
-      let avg =  ((count - 10), points) ||> Seq.skip |> Seq.averageBy (fun p -> p.Y)
+      let minX, maxX, minY, maxY, lastPoint, _ = List.fold minMaxLastPoint (0., 0., 0., 0., origin, true) points
+      let avg =  ((count - 10), points) ||> Seq.skip |> Seq.averageBy (fun p -> p.Y) // todo: better running avg
       let context = { ScaleX = (w - 10.) / window.graph.ActualWidth;
                       ScaleY = (h - 10.) / if minY = maxY then 1. else maxY
                       OffsetX = 0.0;
@@ -123,7 +122,7 @@ let loadWindow() =
       window.MinLabel.Content <- minY.ToString()
       window.AvgLabel.Content <- Math.Round(avg, 0).ToString()
       window.MaxLabel.Content <- maxY.ToString()
-      window.LastLabel.Content <- (Seq.last points).Y.ToString() // todo: optimize to stop walking this thing
+      window.LastLabel.Content <- lastPoint.Y.ToString() // todo: optimize to stop walking this thing
      
       drawLine context (new Point(0., minY)) (new Point(float maxX, minY)) false "average"
       drawLine context (new Point(0., avg)) (new Point(float maxX, avg)) false "average"
@@ -131,15 +130,12 @@ let loadWindow() =
        
       let path = makePath context points
       window.graph.Children.Add(path) |> ignore
-      drawPoint context (Seq.last points)
+      drawPoint context lastPoint
 
       // Resize graph it grew.
       let scaleX = Math.Abs(maxX - minX) / w
       if (scaleX > 1.) then
          window.graph.Width <- scaleX * w
-         let infox = window.graphScroller.HorizontalOffset
-         let infow = window.graphScroller.ViewportWidth
-         let infod = window.graph.ActualWidth
          if (window.graphScroller.HorizontalOffset + window.graphScroller.ViewportWidth > window.graph.ActualWidth - 5.) then // don't scroll if user has scrolled
             window.graphScroller.ScrollToRightEnd()
 
@@ -162,19 +158,18 @@ let loadWindow() =
             System.Windows.MessageBox.Show(error.Message, "error", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
          
          let newDataPoints = if (error <> null) then dataPoints 
-                             else
-                                let tmp = (Seq.append dataPoints (Seq.singleton (new Point(x, float timeTaken))))
-                                if (count = settings.maxDataPoints) then Seq.skip 1 tmp
-                                else tmp
+                             else let tmp = dataPoints @ [new Point(x, float timeTaken)] // is this O(1)?
+                                  if (count = settings.maxDataPoints) then List.tail tmp
+                                  else tmp
          let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
-         if (not (Seq.isEmpty newDataPoints)) then drawGraph newDataPoints newCount |> ignore
+         if (newCount > 0) then drawGraph newDataPoints newCount |> ignore
          if (!timer <> null) then timer.Value.Dispose()
          timer := new Timer(new TimerCallback(fun _ -> monitor d (x + (float d / 50.)) newDataPoints newCount context), null, d, 0)
       })
 
    let restartMonitor d =
       if (!timer <> null) then timer.Value.Dispose()
-      monitor d 0. (Seq.empty) 0 SynchronizationContext.Current
+      monitor d 0. [] 0 SynchronizationContext.Current
 
    let timeInterval = 1000
 
@@ -190,7 +185,7 @@ let loadWindow() =
    captureCurrentSettings(settings)
    
    window.graph.Loaded.Add(fun e ->
-      monitor timeInterval 0. Seq.empty 0 SynchronizationContext.Current)
+      monitor timeInterval 0. [] 0 SynchronizationContext.Current)
 
    window.Root.Loaded.Add(fun _ ->  WinInterop.MakeWindowTransparent(window.Root)) // still necessary?
   
