@@ -31,6 +31,14 @@ type Settings =
       other.url <- s.url
       other.maxDataPoints <- s.maxDataPoints
 
+type Metadata = None | Date of DateTime
+type Entry = Point * Metadata
+
+let entry p: Entry = p, None
+let point (e: Entry) = match e with (p, _) -> p
+let x e = (point e).X
+let y e = (point e).Y
+
 type GraphContext = { ScaleX: float; ScaleY: float; OffsetX: float; OffsetY: float  }
 
 let mutable windowDragging = false
@@ -42,44 +50,45 @@ let loadWindow() =
    let window = MainWindow()
    let origin = new Windows.Point(0., 0.)
 
-   let drawPoint context (point: Point) =
+   let drawPoint context entry =
       let ellipse = new Shapes.Ellipse()
       ellipse.Style <- window.Root.Resources.Item("point") :?> Style
       window.graph.Children.Add(ellipse) |> ignore
-      Canvas.SetLeft(ellipse, (context.OffsetX + point.X) * context.ScaleX)
-      Canvas.SetBottom(ellipse, (context.OffsetY + point.Y) * context.ScaleY)
+      Canvas.SetLeft(ellipse, (context.OffsetX + (x entry)) * context.ScaleX)
+      Canvas.SetBottom(ellipse, (context.OffsetY + (y entry)) * context.ScaleY)
 
-   let drawLine context (left: Point) (right: Point) shouldDrawPoint styleName =
+   let drawLine context left right shouldDrawPoint styleName =
       let line = new Shapes.Line()
       line.X1 <- 0.
-      line.X2 <- (right.X - left.X) * context.ScaleX
+      line.X2 <- ((x right) - (x left)) * context.ScaleX
       line.Y1 <- 0.
-      line.Y2 <- (left.Y - right.Y) * context.ScaleY
+      line.Y2 <- ((y left) - (y right)) * context.ScaleY
       
       line.Style <- window.Root.Resources.Item(styleName) :?> Style
 
-      Canvas.SetLeft(line, (context.OffsetX + left.X) * context.ScaleX)
-      Canvas.SetBottom(line, context.ScaleY * (context.OffsetY + if right.Y < left.Y then right.Y else left.Y))
+      Canvas.SetLeft(line, (context.OffsetX + (x left)) * context.ScaleX)
+      Canvas.SetBottom(line, context.ScaleY * (context.OffsetY + if (y right) < (y left) then (y right) else (y left)))
       if (shouldDrawPoint) then
          drawPoint context right
       window.graph.Children.Add(line) |> ignore
 
-   let makePath context (points: Point list) =
+   let makePath context entries =
       let path = new Shapes.Path()
       let h = window.graph.ActualHeight
-      let firstPoint = List.head points
+      let firstPoint = List.head entries |> point
 
       let scalePoint (p: Point) = new Point(p.X * context.ScaleX, h - p.Y * context.ScaleY)
       let startPoint = scalePoint (new Point(firstPoint.X + context.OffsetX, firstPoint.Y + context.OffsetY))
 
-      path.Data <- new Media.PathGeometry(seq {
-            let figure = new Media.PathFigure()
-            figure.IsClosed <- false
-            figure.StartPoint <- startPoint
-            for p in (List.tail points) do
-               new Media.LineSegment(scalePoint p, true) |> figure.Segments.Add
-            yield figure
-         });
+      // Map line segments to entries.
+      let lineSegments = seq {
+         for e in (List.tail entries) do
+            yield new Media.LineSegment(scalePoint (point e), true), e
+      }
+
+      path.Data <- new Media.PathGeometry(seq { 
+         yield new Media.PathFigure(startPoint, lineSegments |> Seq.map fst |> Seq.cast, false) 
+      })
 
       Canvas.SetLeft(path, 0.0)
       Canvas.SetTop(path, 0.0)
@@ -90,11 +99,38 @@ let loadWindow() =
       label.Style <- window.Root.Resources.Item("tooltipLabel") :?> Style
 
       path.MouseEnter.Add(fun e -> let p = path |> e.GetPosition
-                                   label.Content <- Math.Round((h - p.Y) / context.ScaleY, 2).ToString()
+
+                                   let leftSegment, rightSegment = 
+                                      let firstSegment = Seq.head lineSegments
+                                      if (p.X < (fst firstSegment).Point.X) then firstSegment, firstSegment
+                                      else Seq.zip lineSegments (Seq.skip 1 lineSegments) |>
+                                           Seq.find (fun ((line, _), (nextLine, _)) -> (p.X > line.Point.X && p.X < nextLine.Point.X))
+
+                                   // Determine if left or right segment is closest, and display that metadata.
+                                   let segment =
+                                       if ((fst leftSegment).Point.X - p.X) > (p.X - (fst rightSegment).Point.X) then
+                                          leftSegment
+                                       else rightSegment
+                                   let date = match segment with (_, (p, m)) -> match m with Date d -> d | _ -> failwith "unexpected metadata"
+                                   let dateFormat =
+                                       if (date.DayOfYear = DateTime.Now.DayOfYear) then "HH:mm:ss"
+                                       else "dd/MM/yyyy HH:mm:ss"
+
+                                   label.Content <- Math.Round((h - p.Y) / context.ScaleY, 2).ToString() + " " + date.ToString(dateFormat)
                                    Canvas.SetLeft(tooltipEllipse, p.X)
                                    Canvas.SetTop(tooltipEllipse, p.Y)
                                    Canvas.SetLeft(label, p.X + tooltipEllipse.Width + 5.)
                                    Canvas.SetTop(label, p.Y)
+
+                                   // If label not visible, move it. Can this be done by wpf for us?
+                                   label.Loaded.Add(fun _ -> 
+                                      let lblPos = label.TransformToVisual(window.graph).Transform(origin)
+                                      let r = lblPos.X + label.ActualWidth
+                                      let d = r - window.graphScroller.HorizontalOffset - window.graphScroller.ViewportWidth
+                                      if (d > 0.) then 
+                                         Canvas.SetLeft(label, r - d - label.ActualWidth))
+                                      // todo height
+
                                    window.graph.Children.RemoveAndAdd(tooltipEllipse) |> ignore
                                    window.graph.Children.RemoveAndAdd(label) |> ignore)
 
@@ -102,7 +138,7 @@ let loadWindow() =
 
       path
 
-   let drawGraph points count =
+   let drawGraph entries count =
       let minMaxLastPoint (minX, maxX, minY, maxY, _, start) (p: Point) =
          if (start) then
             (p.X, p.X, p.Y, p.Y, p, false)
@@ -110,8 +146,8 @@ let loadWindow() =
             Math.Min(p.X, minX), Math.Max(p.X, maxX), Math.Min(p.Y, minY), Math.Max(p.Y, maxY), p, false
 
       let w, h = window.graph.ActualWidth, window.graph.ActualHeight
-      let minX, maxX, minY, maxY, lastPoint, _ = List.fold minMaxLastPoint (0., 0., 0., 0., origin, true) points
-      let avg =  ((count - 10), points) ||> Seq.skip |> Seq.averageBy (fun p -> p.Y) // todo: better running avg
+      let minX, maxX, minY, maxY, lastPoint, _ = entries |> List.map point |> List.fold minMaxLastPoint (0., 0., 0., 0., origin, true)
+      let avg =  ((count - 10), entries) ||> Seq.skip |> Seq.averageBy (fun p -> y p) // todo: better running avg
       let context = { ScaleX = (w - 10.) / window.graph.ActualWidth;
                       ScaleY = (h - 10.) / if minY = maxY then 1. else maxY
                       OffsetX = 0.0;
@@ -129,13 +165,13 @@ let loadWindow() =
       window.MaxLabel.Content <- maxY.ToString()
       window.LastLabel.Content <- lastPoint.Y.ToString() // todo: optimize to stop walking this thing
      
-      drawLine context (new Point(0., minY)) (new Point(float maxX, minY)) false "average"
-      drawLine context (new Point(0., avg)) (new Point(float maxX, avg)) false "average"
-      drawLine context (new Point(0., maxY)) (new Point(float maxX, maxY)) false "average"
+      drawLine context (entry (new Point(0., minY))) (entry (new Point(float maxX, minY))) false "average"
+      drawLine context (entry (new Point(0., avg))) (entry (new Point(float maxX, avg))) false "average"
+      drawLine context (entry (new Point(0., maxY))) (entry (new Point(float maxX, maxY))) false "average"
        
-      let path = makePath context points
+      let path = makePath context entries
       window.graph.Children.Add(path) |> ignore
-      drawPoint context lastPoint
+      drawPoint context (entry lastPoint)
 
       // Resize graph it grew.
       let scaleX = Math.Abs(maxX - minX) / w
@@ -152,6 +188,7 @@ let loadWindow() =
       do! Async.SwitchToThreadPool()   
       let client = new System.Net.WebClient()
       let watch = System.Diagnostics.Stopwatch.StartNew()
+      let timestamp = DateTime.Now
       let! data = Async.Catch(client.AsyncDownloadString(new System.Uri(url)))
       let timeTaken = watch.ElapsedMilliseconds
       do! Async.SwitchToContext(context)
@@ -163,7 +200,7 @@ let loadWindow() =
          System.Windows.MessageBox.Show(error.Message, "error", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
       
       let newDataPoints = if (error <> null) then dataPoints 
-                          else let tmp = dataPoints @ [new Point(x, float timeTaken)] // is this O(1)?
+                          else let tmp = dataPoints @ [new Point(x, float timeTaken), Date(timestamp)] // is this O(1)?
                                if (count = settings.maxDataPoints) then List.tail tmp
                                else tmp
       let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
@@ -210,6 +247,12 @@ let loadWindow() =
    let opacity = window.graph.Opacity
    window.Root.Activated.Add(fun _ -> window.graph.Opacity <- 1.)
    window.Root.Deactivated.Add(fun _ -> window.graph.Opacity <- opacity)
+
+   // Suck, can't we do this in xaml, or? Todo: capture a part of the graph here (last x secs)
+   let mgr = new System.Resources.ResourceManager("Resources", System.Reflection.Assembly.GetExecutingAssembly())
+   let data = mgr.GetObject("AppIcon", null) :?> System.Drawing.Bitmap
+   let rect = new Int32Rect(0, 0, data.Width, data.Height)
+   window.Root.Icon <- System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(data.GetHbitmap(), IntPtr.Zero, rect, Media.Imaging.BitmapSizeOptions.FromEmptyOptions()) 
    window.Root
 
 [<STAThread>]

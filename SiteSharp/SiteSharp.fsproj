@@ -56,6 +56,7 @@
     <Resource Include="ApplicationResources.xaml" />
     <Resource Include="MainWindow.xaml" />
     <None Include="packages.config" />
+    <EmbeddedResource Include="Resources.resx" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Accessibility" />
