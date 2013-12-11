@@ -17,6 +17,11 @@ open System.Windows
 
 type MainWindow = XAML<"MainWindow.xaml">
 
+type UIElementCollection with
+   member collection.RemoveAndAdd(e: UIElement) =
+      if (collection.Contains(e)) then collection.Remove(e)
+      collection.Add(e)
+
 type Settings =
    { mutable url: string;
      mutable maxDataPoints: int;
@@ -90,8 +95,8 @@ let loadWindow() =
                                    Canvas.SetTop(tooltipEllipse, p.Y)
                                    Canvas.SetLeft(label, p.X + tooltipEllipse.Width + 5.)
                                    Canvas.SetTop(label, p.Y)
-                                   window.graph.Children.Add(tooltipEllipse) |> ignore
-                                   window.graph.Children.Add(label) |> ignore)
+                                   window.graph.Children.RemoveAndAdd(tooltipEllipse) |> ignore
+                                   window.graph.Children.RemoveAndAdd(label) |> ignore)
 
       tooltipEllipse.MouseLeave.Add(fun _ -> window.graph.Children.Remove(tooltipEllipse); window.graph.Children.Remove(label) |> ignore)
 
