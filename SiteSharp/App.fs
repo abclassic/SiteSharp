@@ -27,9 +27,6 @@ type Settings =
      mutable maxDataPoints: int;
    }
    static member Default = { url = null; maxDataPoints = 3600; }
-   member s.CopyTo other =
-      other.url <- s.url
-      other.maxDataPoints <- s.maxDataPoints
 
 type Metadata = None | Date of DateTime
 type Entry = Point * Metadata
@@ -120,14 +117,15 @@ let loadWindow() =
          label.Content <- Math.Round((h - p.Y) / context.ScaleY, 2).ToString() + " " + date.ToString(dateFormat)
          Canvas.SetLeft(tooltipEllipse, p.X)
          Canvas.SetTop(tooltipEllipse, p.Y)
-         Canvas.SetLeft(label, p.X + tooltipEllipse.Width + 5.)
+         Canvas.SetLeft(label, p.X + tooltipEllipse.Width + 5. - window.graphScroller.HorizontalOffset)
          Canvas.SetTop(label, p.Y)
+         Canvas.SetZIndex(label, Int32.MaxValue)
 
          // If label not visible, move it. Can this be done by wpf for us?
          label.Loaded.Add(fun _ -> 
-            let lblPos = label.TransformToVisual(window.graph).Transform(origin)
+            let lblPos = label.TransformToVisual(window.pane).Transform(origin)
             let r = lblPos.X + label.ActualWidth
-            let d = r - window.graphScroller.HorizontalOffset - window.graphScroller.ViewportWidth
+            let d = r - (*window.graphScroller.HorizontalOffset - window.graphScroller.ViewportWidth *) window.pane.ActualWidth
             let t = if (d > 0.) then 
                        Canvas.SetLeft(label, r - d - label.ActualWidth)
                        Canvas.SetTop(label, lblPos.Y + 10.)
@@ -138,9 +136,10 @@ let loadWindow() =
                Canvas.SetTop(label, t - label.ActualHeight - 10.))
 
          window.graph.Children.RemoveAndAdd(tooltipEllipse) |> ignore
-         window.graph.Children.RemoveAndAdd(label) |> ignore)
+         window.pane.Children
+         window.pane.Children.RemoveAndAdd(label) |> ignore)
 
-      tooltipEllipse.MouseLeave.Add(fun _ -> window.graph.Children.Remove(tooltipEllipse); window.graph.Children.Remove(label) |> ignore)
+      tooltipEllipse.MouseLeave.Add(fun _ -> window.graph.Children.Remove(tooltipEllipse); window.pane.Children.Remove(label) |> ignore)
 
       path
 
@@ -157,7 +156,7 @@ let loadWindow() =
       let context = { ScaleX = (w - 10.) / window.graph.ActualWidth;
                       ScaleY = (h - 10.) / if minY = maxY then 1. else maxY
                       OffsetX = -minX;
-                      OffsetY = -Math.Min(0., minY) }
+                      OffsetY = 0. }
     
       window.graph.Children.Clear()
      
@@ -174,8 +173,25 @@ let loadWindow() =
       drawLine context (entry (new Point(0., minY))) (entry (new Point(float maxX, minY))) false "average"
       drawLine context (entry (new Point(0., avg))) (entry (new Point(float maxX, avg))) false "average"
       drawLine context (entry (new Point(0., maxY))) (entry (new Point(float maxX, maxY))) false "average"
-       
+      
       let path = makePath context entries
+
+       // Update the app icon.
+      path.Loaded.Add(fun e ->
+         let opacity = window.graph.Opacity
+         window.graph.Opacity <- 1.
+         let bitmap = new Media.Imaging.RenderTargetBitmap(int window.graph.ActualWidth, int window.graph.ActualHeight, 96., 96., Media.PixelFormats.Default)
+         let scroll = int window.graphScroller.HorizontalOffset
+         bitmap.Render(window.graph)
+         window.graph.Opacity <- opacity
+         let w = 100
+         let h = 100
+         let x = Math.Max(0, int ((lastPoint.X - minX) * context.ScaleX) - w - scroll)
+         let y = Math.Max(0, int window.graph.ActualHeight - int (lastPoint.Y * context.ScaleY) - h / 2)
+         let y = if y + h > int bitmap.Height then y - h / 2 else y
+         let crop = new Media.Imaging.CroppedBitmap(bitmap, new Int32Rect(x, y, w, h))
+         window.Root.Icon <- crop)
+
       window.graph.Children.Add(path) |> ignore
       drawPoint context (entry lastPoint)
 
