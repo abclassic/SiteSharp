@@ -1,5 +1,5 @@
 ﻿(*
-   Copyright Marcus van Houdt - 9/12/2013
+   Copyright Marcus van Houdt - 2013
  *)
 
 module MainApp
@@ -45,6 +45,7 @@ let mutable windowDragging = false
 let mutable dragCoords = new Windows.Point()
 let settings = Settings.Default
 let tmpSettings = Settings.Default
+let timeInterval = 1000 // setting?
 
 let loadWindow() =
    let window = MainWindow()
@@ -75,15 +76,14 @@ let loadWindow() =
    let makePath context entries =
       let path = new Shapes.Path()
       let h = window.graph.ActualHeight
-      let firstPoint = List.head entries |> point
-
-      let scalePoint (p: Point) = new Point(p.X * context.ScaleX, h - p.Y * context.ScaleY)
-      let startPoint = scalePoint (new Point(firstPoint.X + context.OffsetX, firstPoint.Y + context.OffsetY))
+      
+      let makePoint (p: Point) = new Point(context.ScaleX * (p.X + context.OffsetX), h - context.ScaleY * (p.Y + context.OffsetY))
+      let startPoint = makePoint (List.head entries |> point)
 
       // Map line segments to entries.
       let lineSegments = seq {
          for e in (List.tail entries) do
-            yield new Media.LineSegment(scalePoint (point e), true), e
+            yield new Media.LineSegment(e |> point |> makePoint, true), e
       }
 
       path.Data <- new Media.PathGeometry(seq { 
@@ -93,46 +93,52 @@ let loadWindow() =
       Canvas.SetLeft(path, 0.0)
       Canvas.SetTop(path, 0.0)
       
+      // Setup tooltip.
       let tooltipEllipse = new Shapes.Ellipse()
       tooltipEllipse.Style <- window.Root.Resources.Item("tooltipEllipse") :?> Style
       let label = new Controls.Label()
       label.Style <- window.Root.Resources.Item("tooltipLabel") :?> Style
 
-      path.MouseEnter.Add(fun e -> let p = path |> e.GetPosition
+      path.MouseEnter.Add(fun e -> 
+         let p = path |> e.GetPosition
 
-                                   let leftSegment, rightSegment = 
-                                      let firstSegment = Seq.head lineSegments
-                                      if (p.X < (fst firstSegment).Point.X) then firstSegment, firstSegment
-                                      else Seq.zip lineSegments (Seq.skip 1 lineSegments) |>
-                                           Seq.find (fun ((line, _), (nextLine, _)) -> (p.X > line.Point.X && p.X < nextLine.Point.X))
+         // Find the relevant line segments where the mouse is.
+         let leftSegment, rightSegment = 
+            let firstSegment = Seq.head lineSegments
+            if (p.X < (fst firstSegment).Point.X) then firstSegment, firstSegment
+            else Seq.zip lineSegments (Seq.skip 1 lineSegments) |>
+                 Seq.find (fun ((line, _), (nextLine, _)) -> (p.X > line.Point.X && p.X < nextLine.Point.X))
 
-                                   // Determine if left or right segment is closest, and display that metadata.
-                                   let segment =
-                                       if ((fst leftSegment).Point.X - p.X) > (p.X - (fst rightSegment).Point.X) then
-                                          leftSegment
-                                       else rightSegment
-                                   let date = match segment with (_, (p, m)) -> match m with Date d -> d | _ -> failwith "unexpected metadata"
-                                   let dateFormat =
-                                       if (date.DayOfYear = DateTime.Now.DayOfYear) then "HH:mm:ss"
-                                       else "dd/MM/yyyy HH:mm:ss"
+         // Determine if left or right segment is closest, and display that metadata.
+         let segment = if (p.X - (fst leftSegment).Point.X) < ((fst rightSegment).Point.X - p.X) then 
+                          leftSegment
+                       else rightSegment
+         let date = match segment with (_, (_, Date d)) -> d | _ -> failwith "unexpected metadata"
+         let dateFormat = if (date.DayOfYear = DateTime.Now.DayOfYear) then "HH:mm:ss"
+                          else "dd/MM/yyyy HH:mm:ss"
 
-                                   label.Content <- Math.Round((h - p.Y) / context.ScaleY, 2).ToString() + " " + date.ToString(dateFormat)
-                                   Canvas.SetLeft(tooltipEllipse, p.X)
-                                   Canvas.SetTop(tooltipEllipse, p.Y)
-                                   Canvas.SetLeft(label, p.X + tooltipEllipse.Width + 5.)
-                                   Canvas.SetTop(label, p.Y)
+         label.Content <- Math.Round((h - p.Y) / context.ScaleY, 2).ToString() + " " + date.ToString(dateFormat)
+         Canvas.SetLeft(tooltipEllipse, p.X)
+         Canvas.SetTop(tooltipEllipse, p.Y)
+         Canvas.SetLeft(label, p.X + tooltipEllipse.Width + 5.)
+         Canvas.SetTop(label, p.Y)
 
-                                   // If label not visible, move it. Can this be done by wpf for us?
-                                   label.Loaded.Add(fun _ -> 
-                                      let lblPos = label.TransformToVisual(window.graph).Transform(origin)
-                                      let r = lblPos.X + label.ActualWidth
-                                      let d = r - window.graphScroller.HorizontalOffset - window.graphScroller.ViewportWidth
-                                      if (d > 0.) then 
-                                         Canvas.SetLeft(label, r - d - label.ActualWidth))
-                                      // todo height
+         // If label not visible, move it. Can this be done by wpf for us?
+         label.Loaded.Add(fun _ -> 
+            let lblPos = label.TransformToVisual(window.graph).Transform(origin)
+            let r = lblPos.X + label.ActualWidth
+            let d = r - window.graphScroller.HorizontalOffset - window.graphScroller.ViewportWidth
+            let t = if (d > 0.) then 
+                       Canvas.SetLeft(label, r - d - label.ActualWidth)
+                       Canvas.SetTop(label, lblPos.Y + 10.)
+                       lblPos.Y + 10.
+                    else
+                       lblPos.Y
+            if (t > window.graph.ActualHeight - label.ActualHeight) then
+               Canvas.SetTop(label, t - label.ActualHeight - 10.))
 
-                                   window.graph.Children.RemoveAndAdd(tooltipEllipse) |> ignore
-                                   window.graph.Children.RemoveAndAdd(label) |> ignore)
+         window.graph.Children.RemoveAndAdd(tooltipEllipse) |> ignore
+         window.graph.Children.RemoveAndAdd(label) |> ignore)
 
       tooltipEllipse.MouseLeave.Add(fun _ -> window.graph.Children.Remove(tooltipEllipse); window.graph.Children.Remove(label) |> ignore)
 
@@ -150,7 +156,7 @@ let loadWindow() =
       let avg =  ((count - 10), entries) ||> Seq.skip |> Seq.averageBy (fun p -> y p) // todo: better running avg
       let context = { ScaleX = (w - 10.) / window.graph.ActualWidth;
                       ScaleY = (h - 10.) / if minY = maxY then 1. else maxY
-                      OffsetX = 0.0;
+                      OffsetX = -minX;
                       OffsetY = -Math.Min(0., minY) }
     
       window.graph.Children.Clear()
@@ -213,8 +219,6 @@ let loadWindow() =
       if (!timer <> null) then timer.Value.Dispose(); timer := null
       window.graph.Width <- window.graphScroller.Width
       monitor d 0. [] 0 SynchronizationContext.Current false
-
-   let timeInterval = 1000
 
    // Hook settings dialog.
    let captureCurrentSettings (s) = s.url <- window.settingsUrl.Text
