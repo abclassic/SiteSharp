@@ -5,15 +5,14 @@
 module MainApp
 
 open System
-open System.Collections.Generic
+open System.Net
 open System.Threading
 open System.Windows
-open System.Windows.Media.Animation
 open System.Windows.Controls
+open System.Windows.Media
 open FSharpx
 open Microsoft.FSharp.Control.CommonExtensions
 open Microsoft.FSharp.Control.WebExtensions
-open System.Windows
 
 type MainWindow = XAML<"MainWindow.xaml">
 
@@ -21,12 +20,47 @@ type UIElementCollection with
    member collection.RemoveAndAdd(e: UIElement) =
       if (collection.Contains(e)) then collection.Remove(e)
       collection.Add(e)
+   member collection.RemoveTypeAndAdd<'t when 't :> UIElement>(e: 't) =
+      collection |> Seq.cast<UIElement> |> Seq.where (fun el -> el :? 't) |> Seq.iter collection.Remove
+      collection.Add(e)
+
+type CookieClient() =
+   class
+      inherit System.Net.WebClient()
+      let jar = new CookieContainer()
+      override client.GetWebRequest (uri: System.Uri) =
+         let r = base.GetWebRequest(uri)
+         match r with
+         | :? HttpWebRequest as h ->
+            h.CookieContainer <- jar; r
+         | _ -> r
+   end
 
 type Settings =
    { mutable url: string;
      mutable maxDataPoints: int;
    }
    static member Default = { url = null; maxDataPoints = 3600; }
+
+type Timer(dueTime) =
+   class
+      let mutable timer : System.Threading.Timer = null
+      let mutable paused = false
+      member public self.Continue (cb: obj -> unit) =
+         self.Stop()
+         timer <- new System.Threading.Timer(new TimerCallback(cb), null, dueTime, 0)
+      member public self.IsRunning = not(paused) && timer <> null
+      member public self.Stop() =
+         if (timer <> null) then
+            timer.Dispose()
+            timer <- null
+         paused <- false
+      member public self.Pause pause =
+         paused <- pause
+         if (timer = null) then ()
+         else if (pause) then timer.Change(Int32.MaxValue, 0) |> ignore
+         else timer.Change(dueTime, 0) |> ignore
+   end
 
 type Metadata = None | Date of DateTime
 type Entry = Point * Metadata
@@ -66,8 +100,7 @@ let loadWindow() =
 
       Canvas.SetLeft(line, (context.OffsetX + (x left)) * context.ScaleX)
       Canvas.SetBottom(line, context.ScaleY * (context.OffsetY + if (y right) < (y left) then (y right) else (y left)))
-      if (shouldDrawPoint) then
-         drawPoint context right
+      if (shouldDrawPoint) then drawPoint context right
       window.graph.Children.Add(line) |> ignore
 
    let makePath context entries =
@@ -78,14 +111,8 @@ let loadWindow() =
       let startPoint = makePoint (List.head entries |> point)
 
       // Map line segments to entries.
-      let lineSegments = seq {
-         for e in (List.tail entries) do
-            yield new Media.LineSegment(e |> point |> makePoint, true), e
-      }
-
-      path.Data <- new Media.PathGeometry(seq { 
-         yield new Media.PathFigure(startPoint, lineSegments |> Seq.map fst |> Seq.cast, false) 
-      })
+      let lineSegments = entries |> List.tail |> Seq.map (fun e -> new LineSegment(e |> point |> makePoint, true), e)
+      path.Data <- new PathGeometry(Seq.singleton(new PathFigure(startPoint, lineSegments |> Seq.map fst |> Seq.cast, false)))
 
       Canvas.SetLeft(path, 0.0)
       Canvas.SetTop(path, 0.0)
@@ -136,8 +163,7 @@ let loadWindow() =
                Canvas.SetTop(label, t - label.ActualHeight - 10.))
 
          window.graph.Children.RemoveAndAdd(tooltipEllipse) |> ignore
-         window.pane.Children
-         window.pane.Children.RemoveAndAdd(label) |> ignore)
+         window.pane.Children.RemoveTypeAndAdd(label) |> ignore)
 
       tooltipEllipse.MouseLeave.Add(fun _ -> window.graph.Children.Remove(tooltipEllipse); window.pane.Children.Remove(label) |> ignore)
 
@@ -184,8 +210,7 @@ let loadWindow() =
          let scroll = int window.graphScroller.HorizontalOffset
          bitmap.Render(window.graph)
          window.graph.Opacity <- opacity
-         let w = 100
-         let h = 100
+         let w, h = 100, 100
          let x = Math.Max(0, int ((lastPoint.X - minX) * context.ScaleX) - w - scroll)
          let y = Math.Max(0, int window.graph.ActualHeight - int (lastPoint.Y * context.ScaleY) - h / 2)
          let y = if y + h > int bitmap.Height then y - h / 2 else y
@@ -202,39 +227,40 @@ let loadWindow() =
          if (window.graphScroller.HorizontalOffset + window.graphScroller.ViewportWidth > window.graph.ActualWidth - 5.) then // don't scroll if user has scrolled
             window.graphScroller.ScrollToRightEnd()
 
-   let timer: Ref<Timer> = ref null
+   let timer = new Timer(timeInterval)
+   let client = new CookieClient()
 
    let rec monitor d x dataPoints count context initialCall = Async.Start (async {
       do! Async.SwitchToContext(context)
       let url = settings.url
-      do! Async.SwitchToThreadPool()   
-      let client = new System.Net.WebClient()
+      do! Async.SwitchToThreadPool()
       let watch = System.Diagnostics.Stopwatch.StartNew()
       let timestamp = DateTime.Now
+      if(client.IsBusy) then
+         client.CancelAsync()
+         while(client.IsBusy) do ()
       let! data = Async.Catch(client.AsyncDownloadString(new System.Uri(url)))
       let timeTaken = watch.ElapsedMilliseconds
       do! Async.SwitchToContext(context)
-      if (not(initialCall) && !timer = null) then return () // restart      
-
-      // Show error if there is one.
-      let error = match data with Choice.Choice2Of2 e -> e | _ -> null
-      if (error <> null) then
-         System.Windows.MessageBox.Show(error.Message, "error", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
-      
-      let newDataPoints = if (error <> null) then dataPoints 
-                          else let tmp = dataPoints @ [new Point(x, float timeTaken), Date(timestamp)] // is this O(1)?
-                               if (count = settings.maxDataPoints) then List.tail tmp
-                               else tmp
-      let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
-      if (newCount > 0) then drawGraph newDataPoints newCount |> ignore
-      if (!timer <> null) then timer.Value.Dispose()
-      timer := new Timer(new TimerCallback(fun _ -> monitor d (x + (float d / 50.)) newDataPoints newCount context false), null, d, 0)
+      if (initialCall || timer.IsRunning) then // else restart/pause
+         // Show error if there is one.
+         let error = match data with Choice.Choice2Of2 e -> e | _ -> null
+         if (error <> null) then
+            System.Windows.MessageBox.Show(error.Message, "error", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
+         
+         let newDataPoints = if (error <> null) then dataPoints 
+                             else let tmp = dataPoints @ [new Point(x, float timeTaken), Date(timestamp)] // is this O(1)?
+                                  if (count = settings.maxDataPoints) then List.tail tmp
+                                  else tmp
+         let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
+         if (newCount > 0) then drawGraph newDataPoints newCount |> ignore
+         timer.Continue(fun _ -> monitor d (x + (float d / 50.)) newDataPoints newCount context false)
    })
 
    let restartMonitor d =
-      if (!timer <> null) then timer.Value.Dispose(); timer := null
+      timer.Stop()
       window.graph.Width <- window.graphScroller.Width
-      monitor d 0. [] 0 SynchronizationContext.Current false
+      monitor d 0. [] 0 SynchronizationContext.Current true
 
    // Hook settings dialog.
    let captureCurrentSettings (s) = s.url <- window.settingsUrl.Text
@@ -251,8 +277,14 @@ let loadWindow() =
       monitor timeInterval 0. [] 0 SynchronizationContext.Current true)
 
    window.Root.Loaded.Add(fun _ ->  WinInterop.MakeWindowTransparent(window.Root)) // still necessary?
-  
-   window.thumRestart.Click.Add(fun _ -> restartMonitor timeInterval)
+   window.thumbPause.Click.Add(fun _ -> if (window.thumbPause.Header :?> string = "Pause") then
+                                           timer.Pause(true)
+                                           window.thumbPause.Header <- "Play"
+                                        else
+                                           timer.Pause(false)
+                                           window.thumbPause.Header <- "Pause")
+   window.thumRestart.Click.Add(fun _ -> window.thumbPause.Header <- "Pause"
+                                         restartMonitor timeInterval)
    window.thumbMinimize.Click.Add(fun _ -> window.Root.WindowState <- WindowState.Minimized)
    window.thumbClose.Click.Add(fun _ -> window.Root.Close())
    window.graphScroller.PreviewMouseWheel.Add(fun e -> () |> (if (e.Delta > 0) then window.graphScroller.LineRight else window.graphScroller.LineLeft))
@@ -268,11 +300,12 @@ let loadWindow() =
    window.Root.Activated.Add(fun _ -> window.graph.Opacity <- 1.)
    window.Root.Deactivated.Add(fun _ -> window.graph.Opacity <- opacity)
 
-   // Suck, can't we do this in xaml, or? Todo: capture a part of the graph here (last x secs)
+   // Set initial appicon, soon to be replaced.
    let mgr = new System.Resources.ResourceManager("Resources", System.Reflection.Assembly.GetExecutingAssembly())
    let data = mgr.GetObject("AppIcon", null) :?> System.Drawing.Bitmap
    let rect = new Int32Rect(0, 0, data.Width, data.Height)
    window.Root.Icon <- System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(data.GetHbitmap(), IntPtr.Zero, rect, Media.Imaging.BitmapSizeOptions.FromEmptyOptions()) 
+  
    window.Root
 
 [<STAThread>]

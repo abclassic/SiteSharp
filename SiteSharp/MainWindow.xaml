@@ -114,6 +114,7 @@
                   <MenuItem Header="Minimize" Name="thumbMinimize" />
                   <MenuItem Header="Settings" Name="thumbSettings" />
                   <MenuItem Header="Restart" Name="thumRestart" />
+                  <MenuItem Header="Pause" Name="thumbPause" />
                </ContextMenu>
             </Canvas.ContextMenu>
          </Canvas>

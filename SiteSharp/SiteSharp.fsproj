@@ -21,18 +21,22 @@
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <PlatformTarget>x86</PlatformTarget>
-    <DocumentationFile>bin\Debug\SiteSharp.XML</DocumentationFile>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DocumentationFile>
+    </DocumentationFile>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
+    <Optimize>false</Optimize>
     <Tailcalls>true</Tailcalls>
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <PlatformTarget>x86</PlatformTarget>
-    <DocumentationFile>bin\Release\SiteSharp.XML</DocumentationFile>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DocumentationFile>
+    </DocumentationFile>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
@@ -82,4 +86,13 @@
     <Reference Include="UIAutomationTypes" />
     <Reference Include="WindowsBase" />
   </ItemGroup>
+  <UsingTask TaskName="ILMerge" AssemblyFile="$(ProjectDir)..\packages\ILMerge.MSBuild.Tasks.1.0.0.3\tools\ILMerge.MSBuild.Tasks.dll" Condition="'$(ConfigurationName)' == 'Release'" />
+  <Target Name="AfterBuild" Condition="'$(ConfigurationName)' == 'Release'">
+    <ItemGroup>
+      <MergeAsm Include="$(TargetDir)$(Name).exe" />
+      <MergeAsm Include="$(TargetDir)FSharpx.TypeProviders.Xaml.dll" />
+      <MergeAsm Include="$(TargetDir)FSharp.Core.dll" />
+    </ItemGroup>
+    <ILMerge OutputFile="$(TargetDir)$(Name).exe" InputAssemblies="@(MergeAsm)" TargetKind="WinExe" />
+  </Target>
 </Project>
