@@ -42,9 +42,12 @@
          </Setter>
       </Style>
       <Style x:Key="tooltipLabel" TargetType="Label">
+         <Setter Property="TextOptions.TextRenderingMode" Value="ClearType" />
          <Setter Property="Background" Value="White" />
          <Setter Property="BorderThickness" Value="1" />
          <Setter Property="BorderBrush" Value="WhiteSmoke" />
+         <Setter Property="FontWeight" Value="Bold" />
+         <Setter Property="FontFamily" Value="Consolas" />
          <Setter Property="Effect">
             <Setter.Value>
                <DropShadowEffect

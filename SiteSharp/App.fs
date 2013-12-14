@@ -21,7 +21,7 @@ type UIElementCollection with
       if (collection.Contains(e)) then collection.Remove(e)
       collection.Add(e)
    member collection.RemoveTypeAndAdd<'t when 't :> UIElement>(e: 't) =
-      collection |> Seq.cast<UIElement> |> Seq.where (fun el -> el :? 't) |> Seq.iter collection.Remove
+      collection |> Seq.cast<UIElement> |> Seq.where (fun el -> el :? 't) |> Seq.toArray |> Seq.iter collection.Remove
       collection.Add(e)
 
 type CookieClient() =
