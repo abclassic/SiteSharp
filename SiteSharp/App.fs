@@ -77,6 +77,7 @@ let mutable dragCoords = new Windows.Point()
 let settings = Settings.Default
 let tmpSettings = Settings.Default
 let timeInterval = 1000 // setting?
+let stepFactor = 1./50.
 
 let loadWindow() =
    let window = MainWindow()
@@ -175,7 +176,9 @@ let loadWindow() =
 
       let w, h = window.graph.ActualWidth, window.graph.ActualHeight
       let minX, maxX, minY, maxY, lastPoint, _ = entries |> List.map point |> List.fold minMaxLastPoint (0., 0., 0., 0., origin, true)
-      let avg =  ((count - 10), entries) ||> Seq.skip |> Seq.averageBy (fun p -> y p) // todo: better running avg
+     
+      let avgWindowSize = int (window.Root.ActualWidth / (float timeInterval * stepFactor)) // number of points within a window over which we'll average
+      let avg =  ((count - avgWindowSize), entries) ||> Seq.skip |> Seq.averageBy (fun p -> y p)
       let context = { ScaleX = (w - 10.) / window.graph.ActualWidth;
                       ScaleY = (h - 10.) / if minY = maxY then 1. else maxY
                       OffsetX = -minX;
@@ -261,7 +264,7 @@ let loadWindow() =
                                   else tmp
          let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
          if (newCount > 0) then drawGraph newDataPoints newCount |> ignore
-         timer.Continue(fun _ -> monitor (x + (float timeInterval / 50.)) newDataPoints newCount context false)
+         timer.Continue(fun _ -> monitor (x + (float timeInterval * stepFactor)) newDataPoints newCount context false)
    })
 
    let restartMonitor () =
