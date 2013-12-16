@@ -114,9 +114,6 @@ let loadWindow() =
       let lineSegments = entries |> List.tail |> Seq.map (fun e -> new LineSegment(e |> point |> makePoint, true), e)
       path.Data <- new PathGeometry(Seq.singleton(new PathFigure(startPoint, lineSegments |> Seq.map fst |> Seq.cast, false)))
 
-      Canvas.SetLeft(path, 0.0)
-      Canvas.SetTop(path, 0.0)
-      
       // Setup tooltip.
       let tooltipEllipse = new Shapes.Ellipse()
       tooltipEllipse.Style <- window.Root.Resources.Item("tooltipEllipse") :?> Style
@@ -204,18 +201,28 @@ let loadWindow() =
 
        // Update the app icon.
       path.Loaded.Add(fun e ->
-         let opacity = window.graph.Opacity
-         window.graph.Opacity <- 1.
-         let bitmap = new Media.Imaging.RenderTargetBitmap(int window.graph.ActualWidth, int window.graph.ActualHeight, 96., 96., Media.PixelFormats.Default)
-         let scroll = int window.graphScroller.HorizontalOffset
-         bitmap.Render(window.graph)
-         window.graph.Opacity <- opacity
-         let w, h = 100, 100
-         let x = Math.Max(0, int ((lastPoint.X - minX) * context.ScaleX) - w - scroll)
-         let y = Math.Max(0, int window.graph.ActualHeight - int (lastPoint.Y * context.ScaleY) - h / 2)
-         let y = if y + h > int bitmap.Height then y - h / 2 else y
-         let crop = new Media.Imaging.CroppedBitmap(bitmap, new Int32Rect(x, y, w, h))
-         window.Root.Icon <- crop)
+         // Attempt #1 was to just render the graph and then crop it, however, this becomes prohibitively
+         // slow if the graph becomes very large. Instead clone and render only a portion.
+         let w, h = 100., 100.
+         let x = Math.Max(0., ((lastPoint.X - minX) * context.ScaleX) - w)
+         let y = Math.Max(0., window.graph.ActualHeight - (lastPoint.Y * context.ScaleY) - h / 2.)
+         let y = if y + h > window.graph.ActualHeight then y - h / 2. else y
+
+         // Create a new graph just for the app icon.
+         let tmpCanvas = new Canvas()
+         tmpCanvas.Width <- window.graph.ActualWidth
+         tmpCanvas.Height <- window.graph.ActualHeight
+         tmpCanvas.Style <- window.graph.Style
+         tmpCanvas.Opacity <- 1.
+         let pathClone = new Shapes.Path()
+         pathClone.Data <- path.Data.Clone()
+         pathClone.Style <- path.Style
+         tmpCanvas.Children.Add(pathClone) |> ignore
+         tmpCanvas.Measure(new Size(w, h))
+         tmpCanvas.Arrange(new Rect(-x, -y, w, h)) // arrange only part we wish to render
+         let bitmap = new Media.Imaging.RenderTargetBitmap(int w, int h, 96., 96., Media.PixelFormats.Default)
+         bitmap.Render(tmpCanvas)
+         window.Root.Icon <- bitmap)
 
       window.graph.Children.Add(path) |> ignore
       drawPoint context (entry lastPoint)
@@ -230,7 +237,7 @@ let loadWindow() =
    let timer = new Timer(timeInterval)
    let client = new CookieClient()
 
-   let rec monitor d x dataPoints count context initialCall = Async.Start (async {
+   let rec monitor x dataPoints count context initialCall = Async.Start (async {
       do! Async.SwitchToContext(context)
       let url = settings.url
       do! Async.SwitchToThreadPool()
@@ -254,13 +261,13 @@ let loadWindow() =
                                   else tmp
          let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
          if (newCount > 0) then drawGraph newDataPoints newCount |> ignore
-         timer.Continue(fun _ -> monitor d (x + (float d / 50.)) newDataPoints newCount context false)
+         timer.Continue(fun _ -> monitor (x + (float timeInterval / 50.)) newDataPoints newCount context false)
    })
 
-   let restartMonitor d =
+   let restartMonitor () =
       timer.Stop()
       window.graph.Width <- window.graphScroller.Width
-      monitor d 0. [] 0 SynchronizationContext.Current true
+      monitor 0. [] 0 SynchronizationContext.Current true
 
    // Hook settings dialog.
    let captureCurrentSettings (s) = s.url <- window.settingsUrl.Text
@@ -269,12 +276,12 @@ let loadWindow() =
    window.settingsCancel.Click.Add(fun _ -> window.settings.Visibility <- Visibility.Hidden; reinstatePrevSettings())
    window.settingsOK.Click.Add(fun _ -> settings.url <- window.settingsUrl.Text
                                         window.settings.Visibility <- Visibility.Hidden
-                                        restartMonitor timeInterval)
+                                        restartMonitor())
   
    captureCurrentSettings(settings)
    
    window.graph.Loaded.Add(fun e ->
-      monitor timeInterval 0. [] 0 SynchronizationContext.Current true)
+      monitor 0. [] 0 SynchronizationContext.Current true)
 
    window.Root.Loaded.Add(fun _ ->  WinInterop.MakeWindowTransparent(window.Root)) // still necessary?
    window.thumbPause.Click.Add(fun _ -> if (window.thumbPause.Header :?> string = "Pause") then
@@ -284,17 +291,17 @@ let loadWindow() =
                                            timer.Pause(false)
                                            window.thumbPause.Header <- "Pause")
    window.thumRestart.Click.Add(fun _ -> window.thumbPause.Header <- "Pause"
-                                         restartMonitor timeInterval)
+                                         restartMonitor())
    window.thumbMinimize.Click.Add(fun _ -> window.Root.WindowState <- WindowState.Minimized)
    window.thumbClose.Click.Add(fun _ -> window.Root.Close())
    window.graphScroller.PreviewMouseWheel.Add(fun e -> () |> (if (e.Delta > 0) then window.graphScroller.LineRight else window.graphScroller.LineLeft))
-   window.graph.MouseDown.Add(fun e -> windowDragging <- true; dragCoords <- e.GetPosition(window.Root))
-   window.graph.MouseUp.Add(fun _ -> windowDragging <- false)
+   window.graph.PreviewMouseDown.Add(fun e -> windowDragging <- true; dragCoords <- e.GetPosition(window.Root))
+   window.graph.PreviewMouseUp.Add(fun _ -> windowDragging <- false)
    window.graph.MouseLeave.Add(fun _ -> windowDragging <- false)
-   window.graph.MouseMove.Add(fun e -> if (windowDragging) then
-                                          let p = e.GetPosition(window.Root)
-                                          window.Root.Left <- window.Root.Left + p.X - dragCoords.X
-                                          window.Root.Top <- window.Root.Top + p.Y - dragCoords.Y)
+   window.graph.PreviewMouseMove.Add(fun e -> if (windowDragging) then
+                                                 let p = e.GetPosition(window.Root)
+                                                 window.Root.Left <- window.Root.Left + p.X - dragCoords.X
+                                                 window.Root.Top <- window.Root.Top + p.Y - dragCoords.Y)
 
    let opacity = window.graph.Opacity
    window.Root.Activated.Add(fun _ -> window.graph.Opacity <- 1.)

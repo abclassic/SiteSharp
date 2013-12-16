@@ -1,7 +1,9 @@
 ﻿<Window
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="" Height="250" Width="500" Topmost="True" WindowStyle="None" ResizeMode="CanMinimize" Background="Transparent" AllowsTransparency="true" BorderBrush="black" BorderThickness="2" >
+        Title="" Height="250" Width="500" MinHeight="250" MinWidth="500" MaxHeight="250"
+        ResizeMode="CanMinimize,CanResizeWithGrip" Topmost="True" WindowStyle="None"
+        Background="Transparent" AllowsTransparency="true" BorderBrush="black" BorderThickness="2" >
    <Window.Resources>
       <Style x:Key="point" TargetType="Ellipse">
          <Setter Property="Fill" Value="#FFC7006D" />
@@ -100,6 +102,11 @@
          <Setter Property="StrokeThickness" Value="1.0" />
          <Setter Property="SnapsToDevicePixels" Value="false" />
       </Style>
+      <Style x:Key="graph" TargetType="Canvas">
+         <!--Background="#FFCBE0DB" Opacity="0.8"-->
+         <Setter Property="Background" Value="#FFCBE0DB" />
+         <Setter Property="Opacity" Value="0.8" />
+      </Style>
    </Window.Resources>
 
    <Canvas Name="pane" Background="Transparent">
@@ -107,7 +114,8 @@
                     Height="{Binding ElementName=pane, Path=ActualHeight}"
                     Width="{Binding ElementName=pane, Path=ActualWidth}"
                     Background="Transparent">
-         <Canvas Name="graph" Background="#FFCBE0DB" Opacity="0.8">
+         <Canvas MinWidth="{Binding Path=ActualWidth, RelativeSource={RelativeSource AncestorType=Canvas, Mode=FindAncestor}}"
+                 ScrollViewer.CanContentScroll="False" Name="graph" Style="{StaticResource ResourceKey=graph}" >
             <Canvas.RenderTransform>
                <TranslateTransform X="0.0" Y="0.0" x:Name="graphOffset" />
             </Canvas.RenderTransform>
@@ -122,26 +130,41 @@
             </Canvas.ContextMenu>
          </Canvas>
       </ScrollViewer>
-      <Grid Canvas.Left="368" Canvas.Top="129" Width="100" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+      <Grid Canvas.Left="0" Canvas.Top="0"   Height="{Binding ElementName=pane, Path=ActualHeight}"
+                    Width="{Binding ElementName=pane, Path=ActualWidth}">
          <Grid.RowDefinitions>
-            <RowDefinition Height="23*"/>
-            <RowDefinition Height="23*"/>
-            <RowDefinition Height="23*"/>
-            <RowDefinition Height="23*"/>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="30" />
          </Grid.RowDefinitions>
-         <Label Content="Max: " Grid.Row="0" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
-         <Label Name="MaxLabel" Grid.Row="0" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right"/>
+         <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="100" />
+            <ColumnDefinition Width="10" />
+         </Grid.ColumnDefinitions>
+         <Grid Grid.Column="1" Grid.Row="0" Width="100" HorizontalAlignment="Right" VerticalAlignment="Bottom">
+            <Grid.RowDefinitions>
+               <RowDefinition Height="23*"/>
+               <RowDefinition Height="23*"/>
+               <RowDefinition Height="23*"/>
+               <RowDefinition Height="23*"/>
+            </Grid.RowDefinitions>
+            <Label Content="Max: " Grid.Row="0" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
+            <Label Name="MaxLabel" Grid.Row="0" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right"/>
 
-         <Label Content="Avg: " Grid.Row="1" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
-         <Label Name="AvgLabel" Grid.Row="1" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right" />
+            <Label Content="Avg: " Grid.Row="1" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
+            <Label Name="AvgLabel" Grid.Row="1" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right" />
 
-         <Label Content="Min: " Grid.Row="2" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
-         <Label Name="MinLabel" Grid.Row="2" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right" />
+            <Label Content="Min: " Grid.Row="2" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
+            <Label Name="MinLabel" Grid.Row="2" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right" />
 
-         <Label Content="Last:" Grid.Row="3" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
-         <Label Name="LastLabel" Grid.Row="3" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right" />
+            <Label Content="Last:" Grid.Row="3" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Left"/>
+            <Label Name="LastLabel" Grid.Row="3" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right" />
+         </Grid>
       </Grid>
-      <Grid Name="settings" Visibility="Hidden" Canvas.Left="0." Canvas.Top="0." Width="{Binding ElementName=pane, Path=ActualWidth}" Height="{Binding ElementName=pane, Path=ActualHeight}" Background="White" HorizontalAlignment="Left">
+     
+      <Grid Name="settings" Visibility="Hidden" Canvas.Left="0." Canvas.Top="0." 
+            Width="{Binding ElementName=pane, Path=ActualWidth}" 
+            Height="{Binding ElementName=pane, Path=ActualHeight}" Background="White" HorizontalAlignment="Left">
          <Grid.Opacity>0.9</Grid.Opacity>
          <Grid.RowDefinitions>
             <RowDefinition Height="2" />
