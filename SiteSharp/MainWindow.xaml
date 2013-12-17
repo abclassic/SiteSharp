@@ -3,7 +3,31 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="" Height="250" Width="500" MinHeight="250" MinWidth="500" MaxHeight="250"
         ResizeMode="CanMinimize,CanResizeWithGrip" Topmost="True" WindowStyle="None"
-        Background="Transparent" AllowsTransparency="true" BorderBrush="black" BorderThickness="2" >
+        Background="Transparent" AllowsTransparency="true" Name="Root">
+   <Window.Template>
+      <ControlTemplate TargetType="Window">
+         <Grid>
+            <Grid.RowDefinitions>
+               <RowDefinition Height="2"/>
+               <RowDefinition Height="*"/>
+               <RowDefinition Height="2"/>
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+               <ColumnDefinition Width="2" />
+               <ColumnDefinition Width="*" />
+               <ColumnDefinition Width="2" />
+            </Grid.ColumnDefinitions>
+            <Grid.Background>Black</Grid.Background>
+            <ContentPresenter
+                Grid.Row="1" Grid.Column="1" 
+                Content="{TemplateBinding Content}" 
+                ContentTemplate="{TemplateBinding ContentTemplate}"
+                />
+            <Thumb Width="2" Grid.Column="0" Grid.Row="1" Height="{TemplateBinding Height}" Cursor="SizeWE" OpacityMask="Transparent" Name="thumbLeft" />
+            <Thumb Grid.Row="1" Grid.Column="2" Width="2" Height="{TemplateBinding Height}" Cursor="SizeWE" OpacityMask="Transparent" Name="thumbRight"/>
+         </Grid>
+      </ControlTemplate>
+   </Window.Template>
    <Window.Resources>
       <Style x:Key="point" TargetType="Ellipse">
          <Setter Property="Fill" Value="#FFC7006D" />
@@ -105,7 +129,7 @@
       <Style x:Key="graph" TargetType="Canvas">
          <!--Background="#FFCBE0DB" Opacity="0.8"-->
          <Setter Property="Background" Value="#FFCBE0DB" />
-         <Setter Property="Opacity" Value="0.8" />
+         <Setter Property="Opacity" Value="{Binding RelativeSource={RelativeSource AncestorType=Window, Mode=FindAncestor}}" />
       </Style>
    </Window.Resources>
 

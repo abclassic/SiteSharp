@@ -306,16 +306,26 @@ let loadWindow() =
                                                  window.Root.Left <- window.Root.Left + p.X - dragCoords.X
                                                  window.Root.Top <- window.Root.Top + p.Y - dragCoords.Y)
 
-   let opacity = window.graph.Opacity
-   window.Root.Activated.Add(fun _ -> window.graph.Opacity <- 1.)
-   window.Root.Deactivated.Add(fun _ -> window.graph.Opacity <- opacity)
+   window.Root.Activated.Add(fun _ -> window.Root.Opacity <- 1.)
+   window.Root.Deactivated.Add(fun _ -> window.Root.Opacity <- 0.8) // todo: move to style
+   window.Root.Loaded.Add(fun _ -> 
+      let W = window.Root
+      let windowResizeRight = fun (e: Primitives.DragDeltaEventArgs) -> window.Root.Width <- window.Root.ActualWidth + e.HorizontalChange
+      // The left is harder, and we must do some manual work.
+      let windowResizeLeft = fun (e: Primitives.DragDeltaEventArgs) -> let delta = if e.HorizontalChange <= 0. then e.HorizontalChange
+                                                                                   else Math.Min(window.Root.ActualWidth - window.Root.MinWidth, e.HorizontalChange)
+                                                                       if (delta <> 0.) then
+                                                                          window.Root.Width <- window.Root.ActualWidth - delta
+                                                                          window.Root.Left <- window.Root.Left + delta
+      (window.Root.Template.FindName("thumbLeft", window.Root) :?> Primitives.Thumb).DragDelta.Add(windowResizeLeft)
+      (window.Root.Template.FindName("thumbRight", window.Root) :?> Primitives.Thumb).DragDelta.Add(windowResizeRight))
 
    // Set initial appicon, soon to be replaced.
    let mgr = new System.Resources.ResourceManager("Resources", System.Reflection.Assembly.GetExecutingAssembly())
    let data = mgr.GetObject("AppIcon", null) :?> System.Drawing.Bitmap
    let rect = new Int32Rect(0, 0, data.Width, data.Height)
    window.Root.Icon <- System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(data.GetHbitmap(), IntPtr.Zero, rect, Media.Imaging.BitmapSizeOptions.FromEmptyOptions()) 
-  
+ 
    window.Root
 
 [<STAThread>]
