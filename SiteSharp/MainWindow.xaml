@@ -154,6 +154,8 @@
             </Canvas.ContextMenu>
          </Canvas>
       </ScrollViewer>
+      <Button Content="Button" Canvas.Left="421" Canvas.Top="89" Width="75" Name="TEMP"/>
+      <Button Content="Button" Canvas.Left="421" Canvas.Top="114" Width="75" Name="TEMP2"/>
       <Grid Canvas.Left="0" Canvas.Top="0"   Height="{Binding ElementName=pane, Path=ActualHeight}"
                     Width="{Binding ElementName=pane, Path=ActualWidth}">
          <Grid.RowDefinitions>
@@ -207,5 +209,6 @@
             <Button Width="100" Name="settingsCancel" Content="Cancel" HorizontalAlignment="Left" Margin="5,0,0,0" />
          </StackPanel>
       </Grid>
+      
    </Canvas>
 </Window>

@@ -203,7 +203,7 @@ let loadWindow() =
       let path = makePath context entries
 
        // Update the app icon.
-      path.Loaded.Add(fun e ->
+      path.Loaded.Add(fun _ ->
          // Attempt #1 was to just render the graph and then crop it, however, this becomes prohibitively
          // slow if the graph becomes very large. Instead clone and render only a portion.
          let w, h = 100., 100.
@@ -283,10 +283,9 @@ let loadWindow() =
   
    captureCurrentSettings(settings)
    
-   window.graph.Loaded.Add(fun e ->
-      monitor 0. [] 0 SynchronizationContext.Current true)
+   // Start drawing graph.
+   window.graph.Loaded.Add(fun _ -> monitor 0. [] 0 SynchronizationContext.Current true)
 
-   window.Root.Loaded.Add(fun _ ->  WinInterop.MakeWindowTransparent(window.Root)) // still necessary?
    window.thumbPause.Click.Add(fun _ -> if (window.thumbPause.Header :?> string = "Pause") then
                                            timer.Pause(true)
                                            window.thumbPause.Header <- "Play"
@@ -300,7 +299,7 @@ let loadWindow() =
    window.graphScroller.PreviewMouseWheel.Add(fun e -> () |> (if (e.Delta > 0) then window.graphScroller.LineRight else window.graphScroller.LineLeft))
    window.graph.PreviewMouseDown.Add(fun e -> windowDragging <- true; dragCoords <- e.GetPosition(window.Root))
    window.graph.PreviewMouseUp.Add(fun _ -> windowDragging <- false)
-   window.graph.MouseLeave.Add(fun _ -> windowDragging <- false)
+   window.graph.MouseLeave.Add(fun e -> windowDragging <- false)
    window.graph.PreviewMouseMove.Add(fun e -> if (windowDragging) then
                                                  let p = e.GetPosition(window.Root)
                                                  window.Root.Left <- window.Root.Left + p.X - dragCoords.X
@@ -326,6 +325,12 @@ let loadWindow() =
    let rect = new Int32Rect(0, 0, data.Width, data.Height)
    window.Root.Icon <- System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(data.GetHbitmap(), IntPtr.Zero, rect, Media.Imaging.BitmapSizeOptions.FromEmptyOptions()) 
  
+   window.Root.SourceInitialized.Add(fun _ -> WinInterop.SendMessageHook(window.Root))
+   window.Root.SourceInitialized.Add(fun _ -> WinInterop.BroadcastExistenceMessage(window.Root))
+   window.Root.Closing.Add(fun _ -> WinInterop.BroadcastDeathMessage(window.Root))
+
+   window.TEMP2.Click.Add(fun _ -> WinInterop.HideAllOthers(window.Root))
+
    window.Root
 
 [<STAThread>]
