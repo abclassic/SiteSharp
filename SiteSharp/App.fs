@@ -302,8 +302,10 @@ let loadWindow() =
    window.graph.MouseLeave.Add(fun e -> windowDragging <- false)
    window.graph.PreviewMouseMove.Add(fun e -> if (windowDragging) then
                                                  let p = e.GetPosition(window.Root)
-                                                 window.Root.Left <- window.Root.Left + p.X - dragCoords.X
-                                                 window.Root.Top <- window.Root.Top + p.Y - dragCoords.Y)
+                                                 let dx, dy = p.X - dragCoords.X, p.Y - dragCoords.Y
+                                                 window.Root.Left <- window.Root.Left + dx
+                                                 window.Root.Top <- window.Root.Top + dy
+                                                 Snapper.MoveAllOthers (window.Root) dx dy)
 
    window.Root.Activated.Add(fun _ -> window.Root.Opacity <- 1.)
    window.Root.Deactivated.Add(fun _ -> window.Root.Opacity <- 0.8) // todo: move to style
@@ -325,11 +327,11 @@ let loadWindow() =
    let rect = new Int32Rect(0, 0, data.Width, data.Height)
    window.Root.Icon <- System.Windows.Interop.Imaging.CreateBitmapSourceFromHBitmap(data.GetHbitmap(), IntPtr.Zero, rect, Media.Imaging.BitmapSizeOptions.FromEmptyOptions()) 
  
-   window.Root.SourceInitialized.Add(fun _ -> WinInterop.SendMessageHook(window.Root))
-   window.Root.SourceInitialized.Add(fun _ -> WinInterop.BroadcastExistenceMessage(window.Root))
-   window.Root.Closing.Add(fun _ -> WinInterop.BroadcastDeathMessage(window.Root))
+   window.Root.SourceInitialized.Add(fun _ -> WinInterop.SendMessageHook (window.Root) (Snapper.MessageHook))
+   window.Root.SourceInitialized.Add(fun _ -> Snapper.BroadcastExistenceMessage(window.Root))
+   window.Root.Closing.Add(fun _ -> Snapper.BroadcastDeathMessage(window.Root))
 
-   window.TEMP2.Click.Add(fun _ -> WinInterop.HideAllOthers(window.Root))
+   window.TEMP2.Click.Add(fun _ -> Snapper.HideAllOthers(window.Root))
 
    window.Root
 
