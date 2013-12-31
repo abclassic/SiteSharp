@@ -72,7 +72,6 @@ let y e = (point e).Y
 
 type GraphContext = { ScaleX: float; ScaleY: float; OffsetX: float; OffsetY: float  }
 
-let mutable windowDragging = false
 let mutable dragCoords = new Windows.Point()
 let settings = Settings.Default
 let tmpSettings = Settings.Default
@@ -114,6 +113,7 @@ let loadWindow() =
       // Map line segments to entries.
       let lineSegments = entries |> List.tail |> Seq.map (fun e -> new LineSegment(e |> point |> makePoint, true), e)
       path.Data <- new PathGeometry(Seq.singleton(new PathFigure(startPoint, lineSegments |> Seq.map fst |> Seq.cast, false)))
+      path.Style <- window.Root.Resources.Item("pathStyle") :?> Style
 
       // Setup tooltip.
       let tooltipEllipse = new Shapes.Ellipse()
@@ -227,6 +227,18 @@ let loadWindow() =
          bitmap.Render(tmpCanvas)
          window.Root.Icon <- bitmap)
 
+      let pathArea = new Shapes.Path()
+      pathArea.Data <- path.Data.Clone()
+      let areaFigure = (pathArea.Data :?> PathGeometry).Figures |> Seq.exactlyOne // :?> PathFigure
+      areaFigure.IsClosed <- true
+      if not (Seq.isEmpty (areaFigure.Segments)) then
+         areaFigure.Segments |> Seq.cast<LineSegment> |> Seq.iter (fun line -> line.IsStroked <- false)
+         let lastSegment = Seq.last areaFigure.Segments :?> LineSegment
+         areaFigure.Segments.Add(new LineSegment(new Point(lastSegment.Point.X, 1000.), false)) // down to x-axis, todo: i'm lazy, sort that 1000
+         areaFigure.Segments.Add(new LineSegment(new Point(0., 1000.), false)) // back to origin
+         pathArea.Style <- window.Root.Resources.Item("pathAreaStyle") :?> Style
+         window.graph.Children.Add(pathArea) |> ignore
+
       window.graph.Children.Add(path) |> ignore
       drawPoint context (entry lastPoint)
 
@@ -297,15 +309,18 @@ let loadWindow() =
    window.thumbMinimize.Click.Add(fun _ -> window.Root.WindowState <- WindowState.Minimized)
    window.thumbClose.Click.Add(fun _ -> window.Root.Close())
    window.graphScroller.PreviewMouseWheel.Add(fun e -> () |> (if (e.Delta > 0) then window.graphScroller.LineRight else window.graphScroller.LineLeft))
-   window.graph.PreviewMouseDown.Add(fun e -> windowDragging <- true; dragCoords <- e.GetPosition(window.Root))
-   window.graph.PreviewMouseUp.Add(fun _ -> windowDragging <- false)
-   window.graph.MouseLeave.Add(fun e -> windowDragging <- false)
-   window.graph.PreviewMouseMove.Add(fun e -> if (windowDragging) then
+   window.graph.PreviewMouseDown.Add(fun e -> dragCoords <- e.GetPosition(window.Root); window.graph.CaptureMouse() |> ignore)
+   window.graph.PreviewMouseUp.Add(fun _ ->  window.graph.ReleaseMouseCapture())
+   
+   window.graph.PreviewMouseMove.Add(fun e -> if Input.Mouse.LeftButton = Input.MouseButtonState.Released then
+                                                 window.graph.ReleaseMouseCapture()
+                                              else if window.graph.IsMouseCaptured then
                                                  let p = e.GetPosition(window.Root)
                                                  let dx, dy = p.X - dragCoords.X, p.Y - dragCoords.Y
                                                  window.Root.Left <- window.Root.Left + dx
                                                  window.Root.Top <- window.Root.Top + dy
-                                                 Snapper.MoveAllOthers (window.Root) dx dy)
+                                                // Snapper.MoveAllOthers (window.Root) dx dy)
+                                                 Snapper.OnMoveRootWindow (window.Root) dx dy)
 
    window.Root.Activated.Add(fun _ -> window.Root.Opacity <- 1.)
    window.Root.Deactivated.Add(fun _ -> window.Root.Opacity <- 0.8) // todo: move to style
@@ -330,8 +345,6 @@ let loadWindow() =
    window.Root.SourceInitialized.Add(fun _ -> WinInterop.SendMessageHook (window.Root) (Snapper.MessageHook))
    window.Root.SourceInitialized.Add(fun _ -> Snapper.BroadcastExistenceMessage(window.Root))
    window.Root.Closing.Add(fun _ -> Snapper.BroadcastDeathMessage(window.Root))
-
-   window.TEMP2.Click.Add(fun _ -> Snapper.HideAllOthers(window.Root))
 
    window.Root
 

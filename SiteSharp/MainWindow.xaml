@@ -104,7 +104,7 @@
          <Setter Property="Stroke" Value="Blue" />
          <Setter Property="SnapsToDevicePixels" Value="False" />
       </Style>
-      <Style TargetType="Path">
+      <Style TargetType="Path" x:Key="pathStyle">
          <Setter Property="Fill" Value="{x:Null}" />
          <Setter Property="Stroke" Value="#FFC7006D" />
          <Setter Property="StrokeThickness" Value="2" />
@@ -119,6 +119,10 @@
                   BlurRadius="4"/>
             </Setter.Value>
          </Setter>
+      </Style>
+      <Style BasedOn="{StaticResource ResourceKey=pathStyle}" TargetType="Path" x:Key="pathAreaStyle">
+         <Setter Property="Fill" Value="#FFC7006D" />
+         <Setter Property="Opacity" Value="0.1" />
       </Style>
       <Style x:Key="average" TargetType="Line" BasedOn="{StaticResource ResourceKey=segment}" >
          <Setter Property="Stroke" Value="Black" />
@@ -154,8 +158,6 @@
             </Canvas.ContextMenu>
          </Canvas>
       </ScrollViewer>
-      <Button Content="Button" Canvas.Left="421" Canvas.Top="89" Width="75" Name="TEMP"/>
-      <Button Content="Button" Canvas.Left="421" Canvas.Top="114" Width="75" Name="TEMP2"/>
       <Grid Canvas.Left="0" Canvas.Top="0"   Height="{Binding ElementName=pane, Path=ActualHeight}"
                     Width="{Binding ElementName=pane, Path=ActualWidth}">
          <Grid.RowDefinitions>

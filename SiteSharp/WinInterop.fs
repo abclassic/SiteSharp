@@ -1,5 +1,8 @@
 ﻿module WinInterop
 
+#nowarn "9"  // warning: construct leads to unverifiable IL code
+#nowarn "51" // warning: unverifiable IL code
+
 open Microsoft.FSharp.Core.Operators
 open System
 open System.Runtime.InteropServices
@@ -10,8 +13,14 @@ open Microsoft.FSharp.Reflection
 open System.Runtime.Serialization
 open System.Runtime.Serialization.Formatters.Binary
 
+// Some Win32 types.
+type LONG = int32
+let LONG i = int32 i
+
+type DWORD = uint32
+let DWORD d = uint32 d
+
 [<StructLayout(LayoutKind.Sequential)>]
-[<Struct>]
 type Margins =
    struct
       val mutable cxLeftWidth: int
@@ -19,9 +28,6 @@ type Margins =
       val mutable cyTopHeight: int
       val mutable cyBottomHeight: int
    end
-
-type DWORD = uint32
-let DWORD d = uint32 d
 
 [<StructLayout(LayoutKind.Sequential)>]
 type FLASHWINFO =
@@ -33,19 +39,30 @@ type FLASHWINFO =
       val mutable dwTimeout: uint32
    end
 
+[<StructLayout(LayoutKind.Sequential)>]
+type Win32Rect =
+   struct
+      val mutable left: LONG
+      val mutable top: LONG
+      val mutable right: LONG
+      val mutable bottom: LONG
+
+      override rect.ToString() =
+         "[" + rect.left.ToString() + ", " + rect.top.ToString() + ", " + rect.right.ToString() + ", " + rect.bottom.ToString() + "]"
+   end
+
+[<DllImport("user32.dll")>]
+extern bool GetWindowRect(nativeint handle, Win32Rect* rect)
+
 type Window with
    member window.Handle = (PresentationSource.FromVisual(window) :?> HwndSource).Handle
    static member FromHandle (handle: nativeint) = HwndSource.FromHwnd(handle).RootVisual :?> Window
-
-//[<Class>]
-//type BytePtrStream(len: int, ptr: nativeptr<byte>) =
-//   inherit IO.Stream()
-//   let mutable remaining = len
-//   override stream.Read(buffer: byte[], offset: int, count: int) =
-//      let mutable numRead = 0
-//      for i = offset to offset + count - 1 do
-//         byte[i] <- 0
-//      
+   static member Win32Rect(handle: nativeint) =
+      let mutable rect = new Win32Rect()
+      GetWindowRect(handle, &&rect) |> ignore // error?
+      rect
+   // todo: rename this somehow
+   member window._Win32Rect = Window.Win32Rect(window.Handle)
 
 [<StructLayout(LayoutKind.Sequential)>]
 type CopyDataStruct =
@@ -114,22 +131,6 @@ extern bool DuplicateHandle(nativeint sourceProcessHandle, nativeint sourceHandl
 let HWND_BROADCAST = nativeint 0xffff
 let WM_COPYDATA = 0x004A
 
-//type MessageId = NewWindow
-//
-//type Message = {
-//      window: Window;
-//      id: int
-//   }
-//
-//let NewWindow w = { window = w; id = 0; }
-//
-//let (=>) (window, messageId, payload: obj option) (targetWindow: Window) =
-//   ()
-//
-//let w: Window = null
-//
-//(NewWindow, w) => w
-
 /// Serializes the given object from the source to the target window.
 let SendData (sourceWindow: nativeint) (window: nativeint) (data: obj) =
    let formatter = new BinaryFormatter()
@@ -161,16 +162,3 @@ let SendMessageHook (window: Window) (messageHook: nativeint -> int -> nativeint
    source.AddHook(new HwndSourceHook(fun (hwnd: nativeint) (msg: int) (wParam: nativeint) (lParam: nativeint) (handled : byref<bool>) ->
       let h, r = messageHook hwnd msg wParam lParam
       handled <- h; r))
-
-      //SendMessage(w, uint32 minimizeWindowsMessage, nativeint 0, nativeint 0) |> ignore
-
-//// Dynamic sendmessage support.
-//let (?) (window: Window) (name: string) : 'R =
-//   let rtype = typeof<'R>
-//   if not (FSharpType.IsFunction rtype) then failwith name + " in ?" + name + " should be a function"
-//   failwith "foob"
-//
-//type Message = Dummy of Window
-
-
-
