@@ -37,7 +37,7 @@ let log (msg: string) =
       writer.WriteLine(msg)
    with _ -> ()
 
-log "--------------------------------------------"
+// log "---------------------------------------------------------------"
 let logRect (r: Win32Rect) = log ("" + r.left.ToString() + ", " + r.top.ToString() + ", " + r.right.ToString() + ", " + r.bottom.ToString())
 
 let MessageHook (hwnd: nativeint) (msg: int) (wParam: nativeint) (lParam: nativeint) =
@@ -52,7 +52,7 @@ let MessageHook (hwnd: nativeint) (msg: int) (wParam: nativeint) (lParam: native
             otherSiteSharpWindows.Remove(wParam) |> ignore
          true
       | msg when msg = existenceAckMessage ->
-         log ("received existence from " + wParam.ToString())
+         // log ("received existence from " + wParam.ToString())
          otherSiteSharpWindows.Add(wParam)
          true
       | msg when msg = broadcastExistenceMessage ->
@@ -69,39 +69,28 @@ let MessageHook (hwnd: nativeint) (msg: int) (wParam: nativeint) (lParam: native
    handled, nativeint 0
    
 let BroadcastExistenceMessage (window: Window) =
-   log ("sending existence " + window.Handle.ToString())
+   // log ("sending existence " + window.Handle.ToString())
    let ``process`` = Diagnostics.Process.GetCurrentProcess()
    PostMessage(HWND_BROADCAST, uint32 broadcastExistenceMessage, window.Handle, nativeint ``process``.Id) |> ignore
 
 let BroadcastDeathMessage (window: Window) =
-   log ("sending death " + window.Handle.ToString())
+   // log ("sending death " + window.Handle.ToString())
    let ``process`` = Diagnostics.Process.GetCurrentProcess()
    PostMessage(HWND_BROADCAST, uint32 broadcastDeathMessage, window.Handle, nativeint ``process``.Id) |> ignore
-
-let HideAllOthers(sourceWindow: Window) =
-   for w in otherSiteSharpWindows do
-      SendData (sourceWindow.Handle) w (fun () -> MessageBox.Show("foobar") |> ignore)
-
-let moveWindow x y (w: Window)=
-   w.Left <- w.Left + x
-   w.Top <- w.Top + y
-
-let MoveAllOthers (sourceWin: Window) x y =
-   for w in otherSiteSharpWindows do
-      sourceWin.SendMessage(w, moveWindow x y)
-
 
 // Actual snapping support.
 type WindowList = Collections.Generic.List<nativeint>
 
-type Wind = North | East | South | West
+type Wind = North | East | South | West with
+   override w.ToString() = match w with North -> "north" | East -> "east" | South -> "south" | West -> "west"
+
+type Direction = Horizontal | Vertical
 let opposite w =
    match w with 
       North -> South
     | East -> West
     | South -> North
     | West -> East
-let toStr w = match w with North -> "north" | East -> "east" | South -> "south" | West -> "west"
 
 let wind, windows = fst, snd
 
@@ -118,9 +107,9 @@ let getSnapWindow wind =
 
 let win32RectsIntersect (rLeft: Win32Rect) (rRight: Win32Rect) =
    let test (l1, r1) (l2, r2) =
-      if (l1 < l2) then r1 >= l2
-      else if (r1 > r2) then l1 <= r2
-      else true
+      if (l1 < l2) then r1 > l2
+      else if (r1 > r2) then l1 < r2
+      else false
    (test (rLeft.left, rLeft.right) (rRight.left, rRight.right)) &&
    (test (rLeft.top, rLeft.bottom) (rRight.top, rRight.bottom))
 
@@ -128,9 +117,9 @@ let windowsIntersect wLeft wRight =
    win32RectsIntersect (Window.Win32Rect(wLeft)) (Window.Win32Rect(wRight))
 
 // Snap a window in the given wind.
-let snapWindow wind windowHandle = (wind |> getSnapWindow |> windows).Add(windowHandle)
+let snapWindow wind windowHandle _ = (wind |> getSnapWindow |> windows).Add(windowHandle)
 let enumerateSnappedWindows () =
-   [north; east; south; west] |> List.map (fun f -> f snappedWindows |> windows) |> Seq.collect (fun winList -> winList)
+   [north; east; south; west] |> List.map (fun f -> f snappedWindows |> windows) |> Seq.collect id // (fun winList -> winList)
 
 // Brute force linear search, don't expect to hold too many of these windows.
 let isSnapped (w: nativeint) =
@@ -148,29 +137,21 @@ let relativeLocation source target =
          let d = srcRect.top - trgRect.bottom
          if (d > 0) then yield North, d
          let d = trgRect.left - srcRect.right
-         if (d > 0) then yield West, d
+         if (d > 0) then yield East, d
          let d = trgRect.top - srcRect.bottom
          if (d > 0) then yield South, d
          let d = srcRect.left - trgRect.right
-         if (d > 0) then yield East, d
+         if (d > 0) then yield West, d
       ]
       // Return the location with maximum distance
       Some (fst (List.fold (fun (w, max) (a, b) -> if b > max then (a, b) else (w, max)) (North, 0) possibleLocations))
-
-let moveWindowVerticallyAndSnap amount wind sourceWindow (window: Window) =
-   window.Top <- window.Top + amount
-   snapWindow (opposite wind) sourceWindow
-
-let moveWindowHorizontallyAndSnap amount wind sourceWindow (window: Window) =
-   window.Left <- window.Left + amount
-   snapWindow (opposite wind) sourceWindow
 
 let unsnap w =
    [north; east; south; west] |> List.map (fun f -> f snappedWindows |> windows) |> List.iter (fun list -> list.Remove(w) |> ignore)
 let unsnapAll() = 
    [north; east; south; west] |> List.map (fun f -> f snappedWindows |> windows) |> List.iter (fun list -> list.Clear() |> ignore)
 
-let mutable ignoreMove = false
+let mutable ignoreMove = false // ignore circular links
 let rec moveAndMoveSnappedWindows x y (w: Window) =
    if ignoreMove then ()
    else
@@ -181,33 +162,78 @@ let rec moveAndMoveSnappedWindows x y (w: Window) =
 
 let allowMove () = ignoreMove <- false;
 
+// Todo: this is not really correct as not all windows in the snap "group" are in fact snapped to the root window.
+let AllowResize (rootWin: Window) location (amount: float) =
+   let mutable rect = rootWin._Win32Rect
+   match location with
+   | North -> rect.top <- rect.top + int amount // todo: round?
+   | East -> rect.right <- rect.right + int amount
+   | South -> rect.bottom <- rect.bottom + int amount
+   | West -> rect.left <- rect.left + int amount
+   let r = rect
+   // The resize is allowed if it does not intersect with any snapped window.
+   not (enumerateSnappedWindows() |> Seq.exists (fun w -> win32RectsIntersect r (Window.Win32Rect w)))
+
 let OnMoveRootWindow (rootWin: Window) x y =
    // See if we are about to "snap" to another window.
    let shiftKeyIsDown = Input.Keyboard.IsKeyDown(Input.Key.LeftShift) || Input.Keyboard.IsKeyDown(Input.Key.RightShift)
    let rootRect = rootWin._Win32Rect
-   let delta = 5
+
+   // If within this distance of another window, snap.
+   let delta = 10
+
+   // If within this distance of a corner of the window to snap to, align to this corner.
+   let correctionDelta = 20
+
    if shiftKeyIsDown then
       enumerateSnappedWindows() |> Seq.iter (fun w -> rootWin.SendMessage(w, unsnap, rootWin.Handle))
       unsnapAll()
    else
-      ignoreMove <- true
-      for w in otherSiteSharpWindows do
-         if (not(isSnapped w)) then
-            let wRect = Window.Win32Rect w
-            let location = relativeLocation (rootWin.Handle) w
-            if location <> None then
-               let shift, message = 
-                  match location.Value with
-                  | North -> rootRect.top - wRect.bottom, moveWindowVerticallyAndSnap
-                  | South -> rootRect.bottom - wRect.top, moveWindowVerticallyAndSnap
-                  | East  -> wRect.right - rootRect.left, moveWindowHorizontallyAndSnap
-                  | West  -> rootRect.right - wRect.left, moveWindowHorizontallyAndSnap
-               // log ("got shift " + shift.ToString() + " relative location is " + (toStr (location.Value)) + "border : " + rootWin.BorderThickness.ToString() + " top: " + rootWin.Top.ToString())
-               if (Math.Abs(shift) < delta) then
-                  snapWindow (location.Value) w
-                  rootWin.SendMessage(w, message (float shift) (location.Value) (rootWin.Handle))
-   
-      enumerateSnappedWindows() |> Seq.iter (fun w -> rootWin.SendMessage(w, moveAndMoveSnappedWindows x y))   
+      // Find the window we'll snap to.
+      let snapTargets =
+         otherSiteSharpWindows |>
+            Seq.filter (fun w -> not(isSnapped w)) |> 
+            Seq.choose (fun w ->
+               let wRect = Window.Win32Rect w
+               let location = relativeLocation (rootWin.Handle) w
+               if location = None then None
+               else
+                  let shift, dir = 
+                     match location.Value with
+                     | North -> wRect.bottom - rootRect.top, location.Value
+                     | South -> wRect.top - rootRect.bottom, location.Value
+                     | East  -> wRect.left - rootRect.right, location.Value
+                     | West  -> wRect.right - rootRect.left, location.Value
+                  if (Math.Abs(shift) < delta) then
+                     Some(shift, dir, w)
+                  else None)
+
+      // If there's nothing to snap or we intersect with another window, don't snap and move all snapped windows along.
+      if Seq.isEmpty snapTargets || Seq.exists (fun w -> windowsIntersect rootWin.Handle w) otherSiteSharpWindows then
+         ignoreMove <- true
+         enumerateSnappedWindows() |> Seq.iter (fun w -> rootWin.SendMessage(w, moveAndMoveSnappedWindows x y)) 
+      else
+         let (shift, location, targetWin) = 
+             // Choose the element with minimal shift (i.e. closest window)
+             Seq.minBy (fun (s, _, _) -> s) snapTargets
+
+         let wRect = Window.Win32Rect targetWin
+
+         let round (a: int) (b: int) =
+            let _a, _b = Math.Abs(a), Math.Abs(b)
+            let min = if (_a < _b) then a else b
+            if (Math.Abs(min) < correctionDelta) then float min
+            else 0.
+
+         let dx, dy = 
+            if location = North || location = South then round (rootRect.left - wRect.left) (wRect.right - rootRect.right), float shift
+            else float shift, round (rootRect.top - wRect.top) (wRect.bottom - rootRect.bottom)
+
+         rootWin.SendMessage(targetWin, moveAndMoveSnappedWindows -dx -dy)
+
+         snapWindow location targetWin rootWin
+         rootWin.SendMessage(targetWin, snapWindow (opposite location) (rootWin.Handle))
+
       otherSiteSharpWindows |> Seq.iter (fun w -> rootWin.SendMessage(w, allowMove))
       ignoreMove <- false
    ()

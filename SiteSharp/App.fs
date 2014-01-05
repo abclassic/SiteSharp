@@ -317,20 +317,24 @@ let loadWindow() =
                                               else if window.graph.IsMouseCaptured then
                                                  let p = e.GetPosition(window.Root)
                                                  let dx, dy = p.X - dragCoords.X, p.Y - dragCoords.Y
+
+                                                 // It is important to first do this, otherwise it seems messages "get lost" and windows
+                                                 // get unaligned from their "snap".
+                                                 Snapper.OnMoveRootWindow (window.Root) dx dy
+                                                 
                                                  window.Root.Left <- window.Root.Left + dx
-                                                 window.Root.Top <- window.Root.Top + dy
-                                                // Snapper.MoveAllOthers (window.Root) dx dy)
-                                                 Snapper.OnMoveRootWindow (window.Root) dx dy)
+                                                 window.Root.Top <- window.Root.Top + dy)
 
    window.Root.Activated.Add(fun _ -> window.Root.Opacity <- 1.)
    window.Root.Deactivated.Add(fun _ -> window.Root.Opacity <- 0.8) // todo: move to style
    window.Root.Loaded.Add(fun _ -> 
       let W = window.Root
-      let windowResizeRight = fun (e: Primitives.DragDeltaEventArgs) -> window.Root.Width <- window.Root.ActualWidth + e.HorizontalChange
+      let windowResizeRight = fun (e: Primitives.DragDeltaEventArgs) -> if Snapper.AllowResize (window.Root) (Snapper.West) (e.HorizontalChange) then
+                                                                           window.Root.Width <- window.Root.ActualWidth + e.HorizontalChange
       // The left is harder, and we must do some manual work.
       let windowResizeLeft = fun (e: Primitives.DragDeltaEventArgs) -> let delta = if e.HorizontalChange <= 0. then e.HorizontalChange
                                                                                    else Math.Min(window.Root.ActualWidth - window.Root.MinWidth, e.HorizontalChange)
-                                                                       if (delta <> 0.) then
+                                                                       if (delta <> 0. && Snapper.AllowResize (window.Root) (Snapper.East) delta) then
                                                                           window.Root.Width <- window.Root.ActualWidth - delta
                                                                           window.Root.Left <- window.Root.Left + delta
       (window.Root.Template.FindName("thumbLeft", window.Root) :?> Primitives.Thumb).DragDelta.Add(windowResizeLeft)
@@ -345,6 +349,8 @@ let loadWindow() =
    window.Root.SourceInitialized.Add(fun _ -> WinInterop.SendMessageHook (window.Root) (Snapper.MessageHook))
    window.Root.SourceInitialized.Add(fun _ -> Snapper.BroadcastExistenceMessage(window.Root))
    window.Root.Closing.Add(fun _ -> Snapper.BroadcastDeathMessage(window.Root))
+
+   System.AppDomain.CurrentDomain.UnhandledException.Add(fun args -> if (args.IsTerminating) then Snapper.BroadcastDeathMessage(window.Root))
 
    window.Root
 
