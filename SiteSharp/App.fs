@@ -20,8 +20,10 @@ type UIElementCollection with
    member collection.RemoveAndAdd(e: UIElement) =
       if (collection.Contains(e)) then collection.Remove(e)
       collection.Add(e)
-   member collection.RemoveTypeAndAdd<'t when 't :> UIElement>(e: 't) =
+   member collection.RemoveType<'t when 't :> UIElement>() =
       collection |> Seq.cast<UIElement> |> Seq.where (fun el -> el :? 't) |> Seq.toArray |> Seq.iter collection.Remove
+   member collection.RemoveTypeAndAdd<'t when 't :> UIElement>(e: 't) =
+      collection.RemoveType<'t>()
       collection.Add(e)
 
 type CookieClient() =
@@ -163,7 +165,7 @@ let loadWindow() =
          window.graph.Children.RemoveAndAdd(tooltipEllipse) |> ignore
          window.pane.Children.RemoveTypeAndAdd(label) |> ignore)
 
-      tooltipEllipse.MouseLeave.Add(fun _ -> window.graph.Children.Remove(tooltipEllipse); window.pane.Children.Remove(label) |> ignore)
+      tooltipEllipse.MouseLeave.Add(fun _ -> window.graph.Children.Remove(tooltipEllipse); window.pane.Children.RemoveType<Label>() |> ignore)
 
       path
 

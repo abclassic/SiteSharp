@@ -124,9 +124,9 @@
          <!--<Setter Property="Fill" Value="#FFC7006D" />-->
          <Setter Property="Fill">
             <Setter.Value>
-               <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
-                  <GradientStop Color="#FFFFFFFF" Offset="0.2"/>
-                  <GradientStop Color="#FFC7006D" Offset="0"/>
+               <LinearGradientBrush EndPoint="0.5,2" StartPoint="0.5,0">
+                  <GradientStop Color="Transparent" Offset="0.2"/>
+                  <GradientStop Color="#FF15518D" Offset="0"/>
                </LinearGradientBrush>
             </Setter.Value>
          </Setter>
@@ -140,16 +140,15 @@
          <Setter Property="SnapsToDevicePixels" Value="false" />
       </Style>
       <Style x:Key="graph" TargetType="Canvas">
-         <!--Background="#FFCBE0DB" Opacity="0.8"-->
-         <!--<Setter Property="Background" Value="#FFCBE0DB" />-->
          <Setter Property="Background">
             <Setter.Value>
-               <VisualBrush Viewport="0,0,0.05,0.1" 
-                    TileMode="Tile" AlignmentX="Left" AlignmentY="Top">
+               <!-- Draw a grid. -->
+               <VisualBrush Viewport="0,0,10,10" ViewportUnits="Absolute"
+                    TileMode="Tile" Stretch="Fill" AlignmentX="Left" AlignmentY="Top">
                   <VisualBrush.Visual>
                      <Canvas Background="#FFCBE0DB" Width="10" Height="10">
-                        <Line Stroke="Green" Opacity=".2" StrokeDashArray="1,0,1" StrokeThickness="0.2" Y1="5" Y2="5" X1="0" X2="10" Canvas.Left="0" Canvas.Top="0" />
-                        <Line Stroke="Green" Opacity=".2" StrokeDashArray="1" StrokeThickness="0.1" Y1="0" Y2="10" X1="2" X2="2" />
+                        <Line Stroke="Green" Opacity=".3" StrokeDashArray="1,0,1" StrokeThickness="0.2" Y1="5" Y2="5" X1="0" X2="10" Canvas.Left="0" Canvas.Top="0" />
+                        <Line Stroke="Green" Opacity=".3" StrokeDashArray="1" StrokeThickness="0.1" Y1="0" Y2="10" X1="2" X2="2" />
                      </Canvas>
                   </VisualBrush.Visual>
                </VisualBrush>
