@@ -113,7 +113,7 @@
             <Setter.Value>
                <DropShadowEffect
                   ShadowDepth="1.5"
-                  Direction="315"
+                  Direction="270"
                   Color="Black"
                   Opacity="0.5"
                   BlurRadius="4"/>
@@ -121,8 +121,17 @@
          </Setter>
       </Style>
       <Style BasedOn="{StaticResource ResourceKey=pathStyle}" TargetType="Path" x:Key="pathAreaStyle">
-         <Setter Property="Fill" Value="#FFC7006D" />
-         <Setter Property="Opacity" Value="0.1" />
+         <!--<Setter Property="Fill" Value="#FFC7006D" />-->
+         <Setter Property="Fill">
+            <Setter.Value>
+               <LinearGradientBrush EndPoint="0.5,1" StartPoint="0.5,0">
+                  <GradientStop Color="#FFFFFFFF" Offset="0.2"/>
+                  <GradientStop Color="#FFC7006D" Offset="0"/>
+               </LinearGradientBrush>
+            </Setter.Value>
+         </Setter>
+         <Setter Property="Effect" Value="{x:Null}" />
+         <Setter Property="Opacity" Value="0.3" />
       </Style>
       <Style x:Key="average" TargetType="Line" BasedOn="{StaticResource ResourceKey=segment}" >
          <Setter Property="Stroke" Value="Black" />
@@ -132,7 +141,20 @@
       </Style>
       <Style x:Key="graph" TargetType="Canvas">
          <!--Background="#FFCBE0DB" Opacity="0.8"-->
-         <Setter Property="Background" Value="#FFCBE0DB" />
+         <!--<Setter Property="Background" Value="#FFCBE0DB" />-->
+         <Setter Property="Background">
+            <Setter.Value>
+               <VisualBrush Viewport="0,0,0.05,0.1" 
+                    TileMode="Tile" AlignmentX="Left" AlignmentY="Top">
+                  <VisualBrush.Visual>
+                     <Canvas Background="#FFCBE0DB" Width="10" Height="10">
+                        <Line Stroke="Green" Opacity=".2" StrokeDashArray="1,0,1" StrokeThickness="0.2" Y1="5" Y2="5" X1="0" X2="10" Canvas.Left="0" Canvas.Top="0" />
+                        <Line Stroke="Green" Opacity=".2" StrokeDashArray="1" StrokeThickness="0.1" Y1="0" Y2="10" X1="2" X2="2" />
+                     </Canvas>
+                  </VisualBrush.Visual>
+               </VisualBrush>
+            </Setter.Value>
+         </Setter>
          <Setter Property="Opacity" Value="{Binding RelativeSource={RelativeSource AncestorType=Window, Mode=FindAncestor}}" />
       </Style>
    </Window.Resources>
@@ -189,7 +211,7 @@
             <Label Name="LastLabel" Grid.Row="3" FontFamily="Consolas" FontSize="10" HorizontalAlignment="Right" />
          </Grid>
       </Grid>
-     
+
       <Grid Name="settings" Visibility="Hidden" Canvas.Left="0." Canvas.Top="0." 
             Width="{Binding ElementName=pane, Path=ActualWidth}" 
             Height="{Binding ElementName=pane, Path=ActualHeight}" Background="White" HorizontalAlignment="Left">
@@ -211,6 +233,5 @@
             <Button Width="100" Name="settingsCancel" Content="Cancel" HorizontalAlignment="Left" Margin="5,0,0,0" />
          </StackPanel>
       </Grid>
-      
    </Canvas>
 </Window>
