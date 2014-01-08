@@ -64,8 +64,9 @@ type Timer(dueTime) =
          else timer.Change(dueTime, 0) |> ignore
    end
 
-type Metadata = None | Date of DateTime
-type Entry = Point * Metadata
+type TimeTaken = int
+type Event = DateTime * TimeTaken
+type Entry = Point * Event option
 
 let entry p: Entry = p, None
 let point (e: Entry) = match e with (p, _) -> p
@@ -83,6 +84,21 @@ let stepFactor = 1./50.
 let loadWindow() =
    let window = MainWindow()
    let origin = new Windows.Point(0., 0.)
+
+   let exportAsCSV (entries: Entry list) =
+      let fileDialog = new Microsoft.Win32.SaveFileDialog()
+      fileDialog.Filter <- "Comma Separated Values *.csv|*.csv"
+      if (fileDialog.ShowDialog().Value) then
+         //use fileStream = new IO.FileStream(fileName, IO.FileMode.CreateNew, IO.FileAccess.Write, IO.FileShare.Write);
+         use streamWriter = new IO.StreamWriter(fileDialog.OpenFile(), Text.Encoding.UTF8)
+         streamWriter.WriteLine("datetime_utc,timetaken_millis")
+         entries |> List.map snd |> List.iter (fun event -> 
+            match event with 
+                Some(date, timetaken) ->
+                   streamWriter.Write(date.ToUniversalTime().ToString("u"))
+                   streamWriter.Write(',')
+                   streamWriter.WriteLine(timetaken.ToString("d"))
+              | _ -> ())
 
    let drawPoint context entry =
       let ellipse = new Shapes.Ellipse()
@@ -137,7 +153,7 @@ let loadWindow() =
          let segment = if (p.X - (fst leftSegment).Point.X) < ((fst rightSegment).Point.X - p.X) then 
                           leftSegment
                        else rightSegment
-         let date = match segment with (_, (_, Date d)) -> d | _ -> failwith "unexpected metadata"
+         let date = match segment with (_, (_, Some(d, _))) -> d | _ -> failwith "unexpected metadata"
          let dateFormat = if (date.DayOfYear = DateTime.Now.DayOfYear) then "HH:mm:ss"
                           else "dd/MM/yyyy HH:mm:ss"
 
@@ -254,7 +270,9 @@ let loadWindow() =
    let timer = new Timer(timeInterval)
    let client = new CookieClient()
 
-   let rec monitor x dataPoints count context initialCall = Async.Start (async {
+   let dataPoints = ref []
+
+   let rec monitor x count context initialCall = Async.Start (async {
       do! Async.SwitchToContext(context)
       let url = settings.url
       do! Async.SwitchToThreadPool()
@@ -272,19 +290,19 @@ let loadWindow() =
          if (error <> null) then
             System.Windows.MessageBox.Show(error.Message, "error", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
          
-         let newDataPoints = if (error <> null) then dataPoints 
-                             else let tmp = dataPoints @ [new Point(x, float timeTaken), Date(timestamp)] // is this O(1)?
-                                  if (count = settings.maxDataPoints) then List.tail tmp
-                                  else tmp
+         dataPoints := if (error <> null) then !dataPoints 
+                       else let tmp = !dataPoints @ [new Point(x, float timeTaken), Some(timestamp, int timeTaken)] // is this O(1)?
+                            if (count = settings.maxDataPoints) then List.tail tmp
+                            else tmp
          let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
-         if (newCount > 0) then drawGraph newDataPoints newCount |> ignore
-         timer.Continue(fun _ -> monitor (x + (float timeInterval * stepFactor)) newDataPoints newCount context false)
+         if (newCount > 0) then drawGraph !dataPoints newCount |> ignore
+         timer.Continue(fun _ -> monitor (x + (float timeInterval * stepFactor)) newCount context false)
    })
 
    let restartMonitor () =
       timer.Stop()
       window.graph.Width <- window.graphScroller.Width
-      monitor 0. [] 0 SynchronizationContext.Current true
+      monitor 0. 0 SynchronizationContext.Current true
 
    // Hook settings dialog.
    let captureCurrentSettings (s) = s.url <- window.settingsUrl.Text
@@ -298,7 +316,7 @@ let loadWindow() =
    captureCurrentSettings(settings)
    
    // Start drawing graph.
-   window.graph.Loaded.Add(fun _ -> monitor 0. [] 0 SynchronizationContext.Current true)
+   window.graph.Loaded.Add(fun _ -> monitor 0. 0 SynchronizationContext.Current true)
 
    window.thumbPause.Click.Add(fun _ -> if (window.thumbPause.Header :?> string = "Pause") then
                                            timer.Pause(true)
@@ -310,6 +328,8 @@ let loadWindow() =
                                          restartMonitor())
    window.thumbMinimize.Click.Add(fun _ -> window.Root.WindowState <- WindowState.Minimized)
    window.thumbClose.Click.Add(fun _ -> window.Root.Close())
+   window.thumbCsv.Click.Add(fun _ -> exportAsCSV !dataPoints)
+
    window.graphScroller.PreviewMouseWheel.Add(fun e -> () |> (if (e.Delta > 0) then window.graphScroller.LineRight else window.graphScroller.LineLeft))
    window.graph.PreviewMouseDown.Add(fun e -> dragCoords <- e.GetPosition(window.Root); window.graph.CaptureMouse() |> ignore)
    window.graph.PreviewMouseUp.Add(fun _ ->  window.graph.ReleaseMouseCapture())
