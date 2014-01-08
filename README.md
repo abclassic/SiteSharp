@@ -13,4 +13,6 @@ Displays a graph like:
 * Settings page allows the url to be set / changed
 * Multiple windows will "snap" together and can be moved as a group. Hold the shift key to unsnap a window.
 
+Note that the Release configuration uses ILMerge to create a single executable (Debug doesn't).
+
 License: MIT
