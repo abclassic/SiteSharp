@@ -20,6 +20,9 @@ let LONG i = int32 i
 type DWORD = uint32
 let DWORD d = uint32 d
 
+type UINT = uint32
+let UINT d = uint32 d
+
 [<StructLayout(LayoutKind.Sequential)>]
 type Margins =
    struct
@@ -32,11 +35,11 @@ type Margins =
 [<StructLayout(LayoutKind.Sequential)>]
 type FLASHWINFO =
    struct
-      val mutable cbSize: uint32
+      val mutable cbSize: UINT
       val mutable hwnd: nativeint
-      val mutable dwFlags : uint32
-      val mutable uCount: uint32
-      val mutable dwTimeout: uint32
+      val mutable dwFlags : DWORD
+      val mutable uCount: UINT
+      val mutable dwTimeout: DWORD
    end
 
 [<StructLayout(LayoutKind.Sequential)>]
@@ -61,7 +64,6 @@ type Window with
       let mutable rect = new Win32Rect()
       GetWindowRect(handle, &&rect) |> ignore // error?
       rect
-   // todo: rename this somehow
    member window._Win32Rect = Window.Win32Rect(window.Handle)
 
 [<StructLayout(LayoutKind.Sequential)>]

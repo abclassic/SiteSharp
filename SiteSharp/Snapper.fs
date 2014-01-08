@@ -84,7 +84,6 @@ type WindowList = Collections.Generic.List<nativeint>
 type Wind = North | East | South | West with
    override w.ToString() = match w with North -> "north" | East -> "east" | South -> "south" | West -> "west"
 
-type Direction = Horizontal | Vertical
 let opposite w =
    match w with 
       North -> South
