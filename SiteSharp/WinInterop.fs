@@ -58,7 +58,9 @@ type Win32Rect =
 extern bool GetWindowRect(nativeint handle, Win32Rect* rect)
 
 type Window with
-   member window.Handle = (PresentationSource.FromVisual(window) :?> HwndSource).Handle
+   member window.Handle =
+      let source = PresentationSource.FromVisual(window)
+      if source = null then nativeint 0 else (source :?> HwndSource).Handle
    static member FromHandle (handle: nativeint) = HwndSource.FromHwnd(handle).RootVisual :?> Window
    static member Win32Rect(handle: nativeint) =
       let mutable rect = new Win32Rect()

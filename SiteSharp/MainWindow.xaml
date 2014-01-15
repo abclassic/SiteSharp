@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="" Height="250" Width="500" MinHeight="250" MinWidth="500" MaxHeight="250"
         ResizeMode="CanMinimize,CanResizeWithGrip" Topmost="True" WindowStyle="None"
-        Background="Transparent" AllowsTransparency="true" Name="Root">
+        Background="Transparent" AllowsTransparency="true" Name="Root" Visibility="Hidden">
    <Window.Template>
       <ControlTemplate TargetType="Window">
          <Grid>

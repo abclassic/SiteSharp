@@ -56,6 +56,7 @@
   <Import Project="$(FSharpTargetsPath)" />
   <ItemGroup>
     <Compile Include="WinInterop.fs" />
+    <Compile Include="Console.fs" />
     <Compile Include="Snapper.fsi" />
     <Compile Include="Snapper.fs" />
     <Compile Include="App.fs" />
@@ -86,6 +87,10 @@
     <Reference Include="System.Xml" />
     <Reference Include="UIAutomationProvider" />
     <Reference Include="UIAutomationTypes" />
+    <Reference Include="UnionArgParser">
+      <HintPath>..\packages\UnionArgParser.0.5.9\lib\net40\UnionArgParser.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="WindowsBase" />
   </ItemGroup>
   <UsingTask TaskName="ILMerge" AssemblyFile="$(ProjectDir)..\packages\ILMerge.MSBuild.Tasks.1.0.0.3\tools\ILMerge.MSBuild.Tasks.dll" Condition="'$(ConfigurationName)' == 'Release'" />
