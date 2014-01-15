@@ -12,6 +12,7 @@ Displays a graph like:
 * Supports tooltips on the graph
 * Can be restarted and paused
 * Settings page allows the url to be set / changed
+* Supports command line parameters (use --help or -h for more information)
 * Multiple windows will "snap" together and can be moved as a group. Hold the shift key to unsnap a window.
 
 Note that the Release configuration uses ILMerge to create a single executable (Debug doesn't).
