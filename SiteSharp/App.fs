@@ -81,6 +81,8 @@ let tmpSettings = Settings.Default
 let timeInterval = 1000 // setting?
 let stepFactor = 1./50.
 
+let haveConsole = Console.Attach()
+
 let dataPoints = ref []
 
 let exportAsCSV (entries: Entry list) (file: string option) =
@@ -104,6 +106,7 @@ let exportAsCSV (entries: Entry list) (file: string option) =
 
 let window = MainWindow()
 
+let isWindowVisible() = window.Root.Visibility = Visibility.Visible
 
 let drawPoint context entry =
    let ellipse = new Shapes.Ellipse()
@@ -195,13 +198,16 @@ let drawGraph entries count =
       if (start) then
          (p.X, p.X, p.Y, p.Y, p, false)
       else
-         Math.Min(p.X, minX), Math.Max(p.X, maxX), Math.Min(p.Y, minY), Math.Max(p.Y, maxY), p, false
+         // Note: we skip 0 entries which indicate an error occurred.
+         Math.Min(p.X, minX), Math.Max(p.X, maxX), Math.Min((if p.Y = 0. then minY else p.Y), minY), Math.Max(p.Y, maxY), p, false
 
    let w, h = window.graph.ActualWidth, window.graph.ActualHeight
    let minX, maxX, minY, maxY, lastPoint, _ = entries |> List.map point |> List.fold minMaxLastPoint (0., 0., 0., 0., origin, true)
   
    let avgWindowSize = int (window.Root.ActualWidth / (float timeInterval * stepFactor)) // number of points within a window over which we'll average
-   let avg =  ((count - avgWindowSize), entries) ||> Seq.skip |> Seq.averageBy (fun p -> y p)
+
+   // Calculate the average, ignore 0 values which indicate errors.
+   let avg =  ((count - avgWindowSize), entries) ||> Seq.skip |> Seq.where (fun e -> (point e).Y > 0.) |> Seq.averageBy (fun p -> y p)
    let context = { ScaleX = (w - 10.) / window.graph.ActualWidth;
                    ScaleY = (h - 10.) / if minY = maxY then 1. else maxY
                    OffsetX = -minX;
@@ -290,13 +296,17 @@ let rec monitor x count context initialCall = Async.Start (async {
    if (initialCall || timer.IsRunning) then // else restart/pause
       // Show error if there is one.
       let error = match data with Choice.Choice2Of2 e -> e | _ -> null
-      if (error <> null) then
-         System.Windows.MessageBox.Show(error.Message, "error", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
+      let timeTaken = if error = null then timeTaken else 0L // 0s indicate errors, should we add statuscodes?
+
+      if error <> null then
+         if (isWindowVisible() && not(haveConsole)) then // show a messagebox and don't draw the 0 point
+            System.Windows.MessageBox.Show(error.Message, "error", MessageBoxButton.OK, MessageBoxImage.Error) |> ignore
+         else if (haveConsole) then
+            Console.Error.WriteLine(error.Message)
       
-      dataPoints := if (error <> null) then !dataPoints 
-                    else let tmp = !dataPoints @ [new Point(x, float timeTaken), Some(timestamp, int timeTaken)] // is this O(1)?
-                         if (count = settings.maxDataPoints) then List.tail tmp
-                         else tmp
+      dataPoints := (let tmp = !dataPoints @ [new Point(x, float timeTaken), Some(timestamp, int timeTaken)] // is this O(1)?
+                     if (count = settings.maxDataPoints) then List.tail tmp
+                     else tmp)
       let newCount = if (error <> null || count = settings.maxDataPoints) then count else count + 1
       if (newCount > 0) then drawGraph !dataPoints newCount |> ignore
       timer.Continue(fun _ -> monitor (x + (float timeInterval * stepFactor)) newCount context false)
@@ -398,7 +408,6 @@ with
             | KillAll -> "Kills all site# instances."
 
 app.Startup.Add(fun startup ->
-   let haveConsole = Console.Attach()
    try
       let options = (UnionArgParser.UnionArgParser<CmdOptions>()).ParseCommandLine(startup.Args)
       

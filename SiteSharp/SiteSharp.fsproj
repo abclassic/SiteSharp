@@ -97,8 +97,10 @@
   <Target Name="AfterBuild" Condition="'$(ConfigurationName)' == 'Release'">
     <ItemGroup>
       <MergeAsm Include="$(TargetDir)$(Name).exe" />
-      <MergeAsm Include="$(TargetDir)FSharpx.TypeProviders.Xaml.dll" />
+      <MergeAsm Include="$(TargetDir)UnionArgParser.dll" />
       <MergeAsm Include="$(TargetDir)FSharp.Core.dll" />
+      <MergeAsm Include="$(TargetDir)FSharpx.TypeProviders.Xaml.dll" />
+      <!--<MergeAsm Include="$(TargetDir)FSharp.Core.dll" />-->
     </ItemGroup>
     <ILMerge OutputFile="$(TargetDir)$(Name).exe" InputAssemblies="@(MergeAsm)" TargetKind="WinExe" />
   </Target>
